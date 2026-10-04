@@ -244,3 +244,4 @@ async function boot() {
   setInterval(() => { if (state.screen === "races") renderRaces(); renderContext(); }, 60000);
 }
 boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML("beforeend", `<div class="toast on">Could not load the prototype data</div>`); });
+if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch((e) => console.warn("sw", e)));

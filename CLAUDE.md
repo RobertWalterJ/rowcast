@@ -56,7 +56,7 @@ blender/              Blender 4.2 scripts and renders
 
 `python scripts/build_site.py` assembles `site/index.html` (JS files concatenated in filename order). There is no bundler; keep it lightweight unless there is a clear reason to add one.
 
-Libraries come from cdnjs: `maplibre-gl/4.7.1`, `suncalc/1.9.0`. Fonts: Figtree and IBM Plex Mono from Google Fonts.
+Libraries are self-hosted in `site/` so the app works offline: `maplibre-gl.js` (4.7.1) and `suncalc.js` (1.9.0), both from npm. Fonts: Figtree and IBM Plex Mono from Google Fonts, cached by the service worker when online.
 
 ## Data pipeline
 
