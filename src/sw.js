@@ -23,7 +23,10 @@ self.addEventListener("fetch", (e) => {
   if (url.origin === location.origin) {
     // App shell and data: cache first, so the app opens on the water with no signal.
     // Navigations fall back to the cached index.html.
-    e.respondWith(caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).catch(() => req.mode === "navigate" ? caches.match("index.html") : Response.error())));
+    // Only our own cache is read (never global caches.match, other apps share this origin).
+    // The manifest is never served from cache, so install identity updates reach the phone.
+    if (url.pathname.endsWith("/manifest.webmanifest")) return e.respondWith(fetch(req, { cache: "no-cache" }));
+    e.respondWith(caches.open(SHELL).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).catch(() => req.mode === "navigate" ? c.match("index.html") : Response.error()))));
   } else if (LIVE.test(url.hostname)) {
     // Live weather: network first, last good answer when offline.
     e.respondWith(caches.open(RUNTIME).then((c) => fetch(req).then((r) => put(c, req, r)).catch(() => c.match(req).then((h) => h || Response.error()))));
