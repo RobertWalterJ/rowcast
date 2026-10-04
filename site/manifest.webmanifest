@@ -2,8 +2,8 @@
   "name": "RowCast",
   "short_name": "RowCast",
   "description": "Rowing weather, light and water conditions.",
-  "start_url": "/rowcast/",
-  "scope": "/rowcast/",
+  "start_url": "/rowcast/app/",
+  "scope": "/rowcast/app/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0B1115",
@@ -28,7 +28,7 @@
       "purpose": "maskable"
     }
   ],
-  "id": "/rowcast/",
+  "id": "/rowcast/app/",
   "lang": "en-CA",
   "display_override": [
     "standalone",

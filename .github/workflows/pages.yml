@@ -22,9 +22,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: python scripts/build_site.py
+      # The app is served from /rowcast/app/ (its own install scope and id); the old address redirects there.
+      - run: mkdir public && cp -r site public/app && cp scripts/redirect.html public/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: public
       - id: deployment
         uses: actions/deploy-pages@v4

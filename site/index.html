@@ -1212,7 +1212,11 @@ async function boot() {
   setInterval(() => { if (state.screen === "races") renderRaces(); renderContext(); }, 60000);
 }
 const booted = boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML("beforeend", `<div class="toast on">Could not load the prototype data</div>`); });
-if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch((e) => console.warn("sw", e)));
+if ("serviceWorker" in navigator) addEventListener("load", () => {
+  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("sw", e));
+  // The app used to live at /rowcast/. Remove that old worker so it cannot answer for this page.
+  navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => { if (new URL(r.scope).pathname === "/rowcast/") r.unregister(); })).catch(() => {});
+});
 
 /* ================= app behaviour: Android Back button, install, shortcuts ================= */
 // Back closes the open sheet or drawer first, then returns from a tab to the map, and only then leaves the app.
