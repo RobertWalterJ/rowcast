@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0B6E82",
-  "theme_color": "#0B6E82",
+  "background_color": "#0B1115",
+  "theme_color": "#F4F6F6",
   "icons": [
     {
       "src": "icon-192.png",
@@ -26,6 +26,63 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "id": "./",
+  "lang": "en-CA",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "categories": [
+    "weather",
+    "sports",
+    "navigation"
+  ],
+  "shortcuts": [
+    {
+      "name": "Row call",
+      "short_name": "Row call",
+      "url": "./?s=call",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Forecast",
+      "short_name": "Forecast",
+      "url": "./?s=fc",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Light",
+      "short_name": "Light",
+      "url": "./?s=light",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Races",
+      "short_name": "Races",
+      "url": "./?s=races",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

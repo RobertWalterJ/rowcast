@@ -58,10 +58,10 @@ async function drawHero() {
 const flagIcon = () => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>`;
 
 /* ================= sheets ================= */
-function openSheet(title, html, mount) { $("sheetTitle").textContent = title; $("sheetBody").innerHTML = html; $("sheet").classList.add("on"); $("scrim").classList.add("on"); closeDrawer(true); mount && mount($("sheetBody")); }
-function closeSheet() { $("sheet").classList.remove("on"); if (!$("drawer").classList.contains("on")) $("scrim").classList.remove("on"); }
-function openDrawer() { renderDrawer(); $("drawer").classList.add("on"); $("scrim").classList.add("on"); }
-function closeDrawer(keepScrim) { $("drawer").classList.remove("on"); if (!keepScrim) $("scrim").classList.remove("on"); }
+function openSheet(title, html, mount) { $("sheetTitle").textContent = title; $("sheetBody").innerHTML = html; $("sheet").classList.add("on"); $("scrim").classList.add("on"); closeDrawer(true); syncOverlay(); mount && mount($("sheetBody")); }
+function closeSheet() { $("sheet").classList.remove("on"); if (!$("drawer").classList.contains("on")) $("scrim").classList.remove("on"); syncOverlay(); }
+function openDrawer() { renderDrawer(); $("drawer").classList.add("on"); $("scrim").classList.add("on"); syncOverlay(); }
+function closeDrawer(keepScrim) { $("drawer").classList.remove("on"); if (!keepScrim) $("scrim").classList.remove("on"); syncOverlay(); }
 
 function openLayers() {
   const modes = [["plan", "Plan"], ["water", "On the water"], ["dark", "Dark"]];
@@ -243,5 +243,5 @@ async function boot() {
   initMap();
   setInterval(() => { if (state.screen === "races") renderRaces(); renderContext(); }, 60000);
 }
-boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML("beforeend", `<div class="toast on">Could not load the prototype data</div>`); });
+const booted = boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML("beforeend", `<div class="toast on">Could not load the prototype data</div>`); });
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch((e) => console.warn("sw", e)));

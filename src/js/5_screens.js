@@ -1,5 +1,6 @@
 /* ================= chrome: nav, top bar, chips, time bar ================= */
-function go(screen) {
+function go(screen, fromBack) {
+  navHistory(screen, fromBack);
   state.screen = screen;
   document.querySelectorAll(".nav button").forEach((b) => b.setAttribute("aria-current", b.dataset.s === screen ? "page" : "false"));
   ["map", "call", "fc", "light", "races"].forEach((s) => ($("s-" + s).hidden = s !== screen));

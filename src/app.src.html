@@ -28,7 +28,10 @@
 /* night-vision mode: red-shifted UI for pre-dawn rows */
 :root.night{--bg:#050404; --surface:#0D0807; --glass:rgba(14,8,7,.9); --sunk:#090505; --ink:#E07A6A; --muted:#8C4A40; --line:#2A1512;
   --accent:#D0503F; --accent-ink:#1A0604; --accent-soft:#2A100C; --go:#9A6A3A; --caution:#C8603A; --stop:#FF4A3A; --info:#B0584A; color-scheme:dark}
-html,body{height:100%}
+html,body{height:100%;overscroll-behavior:none}
+/* App feel: no pull-to-refresh, no long-press text selection or callouts on the UI, no double-tap zoom delay. */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+input,textarea,[contenteditable],.selectable{-webkit-user-select:text;user-select:text}
 [hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.4;overflow:hidden;padding-inline:0}
@@ -75,15 +78,15 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .mapfab{position:absolute;z-index:20;right:12px;display:flex;flex-direction:column;gap:8px}
 .chips{position:absolute;z-index:20;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 62px);display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;pointer-events:auto}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex:none;border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:999px;padding:6px 11px;font-size:.8rem;font-weight:600;display:flex;gap:6px;align-items:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.chip{min-height:44px;flex:none;border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:999px;padding:6px 11px;font-size:.8rem;font-weight:600;display:flex;gap:6px;align-items:center;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
 .timebar{position:absolute;z-index:20;left:12px;right:12px;bottom:12px;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px 12px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center}
-.play{width:40px;height:40px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;grid-row:span 2}
+.play{width:48px;height:48px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;grid-row:span 2}
 .play svg{width:18px;height:18px}
 .timelbl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.82rem}
 .timelbl b{font-size:.95rem}
-#hourSlider{width:100%;accent-color:var(--accent);margin:0}
+#hourSlider{width:100%;height:44px;accent-color:var(--accent);margin:-8px 0;touch-action:pan-y}
 .daytrack{position:relative;height:6px;border-radius:3px;overflow:hidden;background:var(--sunk);grid-column:2;margin-top:-2px}
 .daytrack i{position:absolute;top:0;bottom:0}
 .readcard{position:absolute;z-index:25;left:12px;right:12px;bottom:96px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:12px 14px;display:flex;gap:12px;align-items:flex-start}
@@ -258,7 +261,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
 
   <div class="scrim" id="scrim"></div>
   <aside class="drawer" id="drawer" aria-label="Menu"></aside>
-  <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div class="sh-head"><h2 id="sheetTitle"></h2><button class="iconbtn" style="width:36px;height:36px;box-shadow:none" id="sheetClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="sh-body" id="sheetBody"></div></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div class="sh-head"><h2 id="sheetTitle"></h2><button class="iconbtn" style="width:44px;height:44px;box-shadow:none" id="sheetClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="sh-body" id="sheetBody"></div></div>
   <div class="toast" id="toast"></div>
 </div>
 
