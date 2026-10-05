@@ -120,7 +120,7 @@ function buildLayers() {
   L({ id: "bw", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwFill, "line-width": z(2, 11) } });
   L({ id: "bw-rubble", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], minzoom: 12.5, layout: { "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(0.8, 3), "line-dasharray": [1.4, 1.8], "line-opacity": 0.8 } });
   // Official Canadian Hydrographic Service chart: covers our own base cartography when on; marks, hazards, wind and the rest stay on top.
-  L({ id: "chs", type: "raster", source: "chs", layout: { visibility: state.layers.chs ? "visible" : "none" }, paint: { "raster-fade-duration": 0 } });
+  L({ id: "chs", type: "raster", source: "chs", layout: { visibility: state.layers.chs || V().chart ? "visible" : "none" }, paint: { "raster-fade-duration": 0 } });
   L({ id: "power", type: "line", source: "power", minzoom: 12, paint: { "line-color": P.power, "line-width": 1, "line-dasharray": [6, 3] } });
   // hazards: dams/weirs in danger magenta with a hatched band, lock gates as heavy bars
   L({ id: "dam-band", type: "line", source: "hazards", filter: ["in", ["get", "kind"], ["literal", ["dam", "weir"]]], paint: { "line-color": P.hazard, "line-width": z(3, 9), "line-opacity": 0.35 } });
@@ -164,7 +164,7 @@ function setLayerVis() {
   ["depth-fill", "depth-line", "lbl-depth"].forEach((id) => set(id, state.layers.depth));
   ["marks", "sm-areas"].forEach((id) => set(id, state.layers.marks));
   ["alerts-fill", "alerts-line"].forEach((id) => set(id, state.layers.alerts));
-  radarToggle(); ltgToggle(); if (map.getLayer("chs")) map.setLayoutProperty("chs", "visibility", state.layers.chs ? "visible" : "none"); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
+  radarToggle(); ltgToggle(); if (map.getLayer("chs")) map.setLayoutProperty("chs", "visibility", state.layers.chs || V().chart ? "visible" : "none"); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
   ["course", "course-case", "course-ticks"].forEach((id) => set(id, state.layers.course));
   if (map.getLayer("relief")) map.setPaintProperty("relief", "raster-opacity", state.layers.relief ? pal().relief : 0);
   overlay.resetTrails(); overlay.dirty = true; renderLegendMini(); renderQuickChips(); save();
@@ -220,7 +220,7 @@ function onMapClick(e) {
   if (w && w.hs != null && inWater) cells.push(["Waves", w.hs.toFixed(1) + ' <small class="muted">m</small>']);
   if (w && inWater) cells.push(["Whitecaps", whitecaps(w.s, w.g).short]);
   if (depth) cells.push(["Depth", `${depth.properties.min}–${depth.properties.max > 100 ? "50+" : depth.properties.max} <small class="muted">m</small>`]);
-  else if (inWater && !V().depth) cells.push(["Depth", '<small class="muted">no survey</small>']);
+  else if (inWater && !V().depth) cells.push(["Depth", V().chart ? '<small class="muted">see chart soundings</small>' : '<small class="muted">no survey</small>']);
   if (w && w.steam && inWater) cells.push(["Fog", '<span style="color:var(--info)">steam fog</span>']);
   card.innerHTML = `<div style="flex:1;min-width:0"><div class="small muted" style="margin-bottom:6px">${esc(overlay.timeLabel())} · ${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}${al ? ` · <b style="color:var(--caution)">${esc(al.properties.name)}</b>` : ""}</div>
     <div class="readgrid">${cells.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join("")}</div></div>${close}`;

@@ -8,6 +8,9 @@ const VENUES = {
     map: "map_argo.json", fc: "argo", water: null, heading: null,
     note: "Western Beaches watercourse and Humber Bay. Depths from NOAA Great Lakes bathymetry.", depth: true }
 };
+VENUES.hamilton = { id: "hamilton", name: "Leander BC", place: "Hamilton Harbour, ON", kind: "venue", center: [-79.855, 43.288], zoom: 12.4,
+  map: "map_hamilton.json", fc: "hamilton", water: null, heading: null, depth: false, chart: true, fetchM: 4000,
+  note: "Hamilton Harbour. The official Canadian Hydrographic Service chart is the base map here, with live wind, radar and lightning on top." };
 const DEFAULT_EVENTS = [
   { id: "hott-2026", name: "Head of the Trent", venue: "trent", start: "2026-10-03", end: "2026-10-04",
     detail: "4.7 km head race, upstream (north). Finish moved to just before the Bata Library turn (Faryon Bridge works).",

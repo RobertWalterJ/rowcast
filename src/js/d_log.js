@@ -66,11 +66,12 @@ async function conditionsFor(venue, start, dur) {
 /* ---------- list, insights and cards ---------- */
 function openLog() {
   const list = state.log.slice().sort((a, b) => b.start.localeCompare(a.start));
-  openSheet("Row log", `<div class="sharerow"><button class="btn primary" id="lgAdd">Log a row</button><button class="btn" id="lgImport">Import GPX or TCX</button></div>
+  openSheet("Row log", `<div class="sharerow"><button class="btn primary" id="lgAdd">Log a row</button><button class="btn" id="lgStrava">Strava</button><button class="btn" id="lgImport">Import GPX or TCX</button></div>
     <input type="file" id="lgFile" accept=".gpx,.tcx,.fit,application/gpx+xml,text/xml,application/xml" multiple hidden>
-    <p class="small muted" style="margin-top:8px">Strava: open the activity on strava.com, then the three dots, then Export GPX. Garmin Connect: open the activity, then the gear icon, then Export to GPX or TCX. Direct account links need a server, so for now the file is the bridge.</p>
+    <p class="small muted" style="margin-top:8px">Strava reads your rowing activities directly (Garmin rows come through Strava). You can also import a GPX or TCX file exported from Strava or Garmin Connect.</p>
     ${logInsights(list)}${list.length ? `<div class="loglist">${list.map(logCard).join("")}</div>` : `<p class="muted" style="margin-top:14px">No rows logged yet. After a row, tap Log a row and say how it went.</p>`}`, (b) => {
     b.querySelector("#lgAdd").onclick = () => openLogEntry({ venue: state.venue, start: addMin(nowLocal(), -90).slice(0, 15) + "0", dur: 90 });
+    b.querySelector("#lgStrava").onclick = openStrava;
     const fi = b.querySelector("#lgFile"); b.querySelector("#lgImport").onclick = () => fi.click(); fi.onchange = () => importFiles([...fi.files]);
     b.querySelectorAll("[data-log]").forEach((el) => el.onclick = () => openLogEntry(state.log.find((e) => e.id === el.dataset.log)));
   });
@@ -138,6 +139,7 @@ async function importFiles(files) {
       last = { id: "r" + Date.now() + n++, venue, start, dur: Math.max(10, Math.round(s.durS / 60)), source: "file", boat: "", act: { distM: s.distM, durS: Math.round(s.durS), movingS: s.movingS, splitS: s.splitS, avgSpeed: s.avgSpeed, maxSpeed: s.maxSpeed, avgHr: s.avgHr, maxHr: s.maxHr, avgCad: s.avgCad, track: s.track },
         felt: "as expected", wcSeen: "none", wavesFelt: "small", rain: "none", storm: "none", cutShort: false, notes: a.name ? a.name.slice(0, 120) : "", cond: null };
       state.log.push(last);
+      if (files.length > 1) { try { last.cond = await conditionsFor(last.venue, last.start, last.dur); } catch (e2) { /* looked up when the row is opened */ } }
     } catch (err) { toast(`${f.name}: ${err.message}`); }
   }
   saveLog();

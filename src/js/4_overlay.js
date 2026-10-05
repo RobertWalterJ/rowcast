@@ -87,7 +87,7 @@ const overlay = {
       const ll = map.unproject([p.x, p.y]); const w = this.sample(ll.lng, ll.lat);
       if (!w || p.age++ > p.max) { Object.assign(p, this.spawnSea(), { age: 0 }); continue; }
       const wd = this.waveDirAt(ll.lng, ll.lat); const from = wd != null ? wd : w.dir; const to = ((from + 180) % 360) * Math.PI / 180;
-      const hs = w.hs != null ? w.hs : 0.0016 * (w.s / 3.6) * Math.sqrt(800 / 9.81);
+      const hs = w.hs != null ? w.hs : 0.0016 * (w.s / 3.6) * Math.sqrt((V().fetchM || 800) / 9.81);
       const sp = (0.3 + 1.1 * Math.min(hs, 0.8)) * zs; const dx = Math.sin(to) * sp, dy = -Math.cos(to) * sp;
       const wc = Math.max(0, Math.min(1, (Math.max(w.s, w.g * 0.7) - 17) / 14)), ch = Math.max(0, Math.min(1, (hs - 0.12) / 0.4));
       if (p.r < wc) white.push([p.x, p.y, p.x + dx * 2.4, p.y + dy * 2.4]); else if (p.q < ch) crest.push([p.x, p.y, dx, dy, hs]);

@@ -16,6 +16,10 @@ const SPOTS = {
     { id: "onplace", name: "Ontario Place", lon: -79.4182, lat: 43.6278 },
     { id: "hanlan", name: "Hanlan's Point", lon: -79.3893, lat: 43.6277 }
   ],
+  hamilton: [
+    { id: "leander", name: "Leander BC", lon: -79.8642, lat: 43.2736 },
+    { id: "canal", name: "Burlington Canal", lon: -79.7978, lat: 43.2988 }
+  ],
   trent: []
 };
 state.userSpots = store.get("spots", {});

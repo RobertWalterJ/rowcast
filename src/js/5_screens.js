@@ -32,7 +32,7 @@ const LAYER_DEFS = [
 function renderQuickChips() {
   const items = [["wind", "Wind", "#0B6E82"], ["vis", "Fog", "#9aa"], ["waves", "Waves", "#E6A01E"], ["radar", "Radar", "#4caf50"], ["lightning", "Lightning", "#E6C200"], ["chs", "Official chart", "#4F86B3"], ["alerts", "Alerts", "#C9A400"], ["depth", "Depth", "#4F86B3"]]
     .filter(([k]) => k !== "waves" || state.wx[state.venue].waves).filter(([k]) => k !== "depth" || V().depth);
-  $("quickChips").innerHTML = items.map(([k, l, c]) => `<button class="chip" data-k="${k}" aria-pressed="${state.layers[k]}"><i style="background:${c}"></i>${l}</button>`).join("");
+  $("quickChips").innerHTML = items.map(([k, l, c]) => `<button class="chip" data-k="${k}" aria-pressed="${state.layers[k] || (k === "chs" && !!V().chart)}"><i style="background:${c}"></i>${l}</button>`).join("");
   $("quickChips").querySelectorAll(".chip").forEach((b) => b.onclick = () => { state.layers[b.dataset.k] = !state.layers[b.dataset.k]; setLayerVis(); });
 }
 function renderLegendMini() {
@@ -66,7 +66,7 @@ function defaultWindow() {
 function sunTimes(dateStr) { const v = V(); return SunCalc.getTimes(localToDate(dateStr.slice(0, 10) + "T12:00"), v.center[1], v.center[0]); }
 function computeCall(win) {
   const v = fcVenue(); if (!v || !v.hourly) return null;
-  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes, lightning: state.lightning && state.lightning[state.venue] });
+  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes, fetchM: V().fetchM, lightning: state.lightning && state.lightning[state.venue] });
 }
 function gauge(val, c, s, max, lab) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>${lab ? `<div class="lim">${lab}</div>` : ""}`; }
 function renderCall() {

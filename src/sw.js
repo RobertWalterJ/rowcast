@@ -59,7 +59,7 @@ async function swCheckWatches() {
     let lightning = null; try { lightning = await lightningScan(ven.lat, ven.lon, 100); } catch (err) { /* no lightning data: the forecast rules still run */ }
     let pt, marine = null; try { pt = await fetchPoint(ven); if (ven.marine) marine = await fetchMarine(ven.marine[0], ven.marine[1]); } catch (err) { continue; }
     for (const w of byVenue[vid]) {
-      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water, lightning,
+      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water, fetchM: ven.fetchM, lightning,
         sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), ven.center[1], ven.center[0]) });
       if (!c) continue; const sum = watchSummary(c);
       if (!w.base) { w.base = sum; continue; }

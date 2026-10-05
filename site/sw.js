@@ -1,8 +1,8 @@
 /* RowCast service worker. VERSION and PRECACHE are filled in by scripts/build_site.py. */
 self.window = self; // suncalc.js expects a browser global
 importScripts("callcore.js", "suncalc.js"); // the same go / caution / stay ashore rules the page uses
-const VERSION = "b4177911e1";
-const PRECACHE = ["./", "apple-touch-icon.png", "callcore.js", "fc.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "index.html", "map_argo.json", "map_trent.json", "maplibre-gl.js", "relief.json", "relief_argo.png", "relief_trent.png", "shell_1x.png", "shell_2x.png", "shell_4x.png", "shell_8p.png", "suncalc.js", "wx.json"];
+const VERSION = "09fa507d59";
+const PRECACHE = ["./", "apple-touch-icon.png", "callcore.js", "fc.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "index.html", "map_argo.json", "map_hamilton.json", "map_trent.json", "maplibre-gl.js", "relief.json", "relief_argo.png", "relief_hamilton.png", "relief_trent.png", "shell_1x.png", "shell_2x.png", "shell_4x.png", "shell_8p.png", "suncalc.js", "wx.json"];
 const FONTS = "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap";
 const SHELL = "rowcast-shell-" + VERSION, RUNTIME = "rowcast-runtime";
 const LIVE = /^(api\.open-meteo\.com|marine-api\.open-meteo\.com|api\.weather\.gc\.ca|geo\.weather\.gc\.ca|www\.ndbc\.noaa\.gov|api-iwls\.dfo-mpo\.gc\.ca)$/;
@@ -59,7 +59,7 @@ async function swCheckWatches() {
     let lightning = null; try { lightning = await lightningScan(ven.lat, ven.lon, 100); } catch (err) { /* no lightning data: the forecast rules still run */ }
     let pt, marine = null; try { pt = await fetchPoint(ven); if (ven.marine) marine = await fetchMarine(ven.marine[0], ven.marine[1]); } catch (err) { continue; }
     for (const w of byVenue[vid]) {
-      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water, lightning,
+      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water, fetchM: ven.fetchM, lightning,
         sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), ven.center[1], ven.center[0]) });
       if (!c) continue; const sum = watchSummary(c);
       if (!w.base) { w.base = sum; continue; }

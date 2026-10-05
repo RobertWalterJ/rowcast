@@ -56,6 +56,7 @@ src/js/b_watch.js     "Watch this row": alerts when the call changes (page side;
 src/js/c_card.js      "Share as a picture" conditions card (canvas, 1080 x 1350, never states a verdict)
 src/js/d_log.js       row log: GPX/TCX import, weather lookup for past rows, how-it-felt assessment, insights
 src/js/e_extras.js    calendar (.ics) export, saved launch times, measured buoy card, desktop notes
+src/js/f_strava.js    Strava link: your own Strava API app keys on the phone, reads rowing activities into the log
 Files in src/js are concatenated in filename order, so keep the 0_ to 9_ then a_ prefixes.
 src/maplibre.css      MapLibre 4.7.1 CSS (inlined at build)
 site/                 deployable output: index.html + data files + Blender sprites
@@ -187,5 +188,6 @@ This app shares `https://robertwalterj.github.io/` with all of Robert's other ap
 
 - Live in the browser (CORS ok): Open-Meteo forecast and marine, ECCC alerts, GeoMet radar and lightning, CHS water levels, Water Survey of Canada levels, CHS ENC chart (egisp.dfo-mpo.gc.ca WMS).
 - NDBC buoy 45139 is not readable from a browser, so `scripts/fetch_buoy.py` runs in the Pages deploy job (every 30 minutes) and writes `site/buoy.json`, which is git-ignored and excluded from the precache.
-- Strava and Garmin: no account link. Strava OAuth needs a server-side client secret and Garmin Connect is partner-only. The bridge is importing exported GPX or TCX files (file picker or Android share target).
+- Strava: direct, device-only. Robert creates his own free Strava API app (strava.com/settings/api, callback domain robertwalterj.github.io) and pastes the Client ID and Secret into RowCast; Strava's API and token endpoint allow browser calls. Keys stay in localStorage on his phone (note: shared origin, so never put untrusted apps on robertwalterj.github.io). Garmin Connect has no personal API; Garmin rows reach RowCast by linking Garmin Connect to Strava. GPX and TCX import (file picker or Android share target) remains as a fallback.
+- Hamilton (Leander Boat Club, 50 Leander Drive): `scripts/add_venue_hamilton.py` builds the venue. Overpass would not answer, so the water outline is traced from the CHS chart image and the official chart is the base map (venue flag `chart: true`, `fetchM: 4000` for harbour chop).
 - The share card and share text never say go or stay ashore. The call is the crew's.

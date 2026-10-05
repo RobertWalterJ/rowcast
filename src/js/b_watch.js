@@ -22,7 +22,7 @@ function watchTargets() {
 function waterTempFor(vid) { const v = VENUES[vid]; if (v.water != null) return v.water; const fv = state.fc.venues[v.fc]; const o = fv && fv.buoy && fv.buoy.obs && fv.buoy.obs.find((x) => x.wtmp != null); return o ? o.wtmp : 15; }
 function computeFor(t) {
   const v = VENUES[t.venue], fv = state.fc && state.fc.venues && state.fc.venues[v.fc]; if (!fv || !fv.hourly) return null;
-  return callCore({ hourly: fv.hourly, waves: fv.waves, win: { start: t.start, dur: t.dur }, limits: state.limits, waterTemp: waterTempFor(t.venue), lightning: state.lightning && state.lightning[t.venue],
+  return callCore({ hourly: fv.hourly, waves: fv.waves, win: { start: t.start, dur: t.dur }, limits: state.limits, waterTemp: waterTempFor(t.venue), fetchM: v.fetchM, lightning: state.lightning && state.lightning[t.venue],
     sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), v.center[1], v.center[0]) });
 }
 
@@ -88,7 +88,7 @@ async function syncWatches() {
   if (!state.fc || !("indexedDB" in window)) return;
   try {
     const db = await idbOpen(); const targets = watchTargets().map((t) => Object.assign({}, t, { base: state.watchBase[t.id] || null }));
-    const venues = {}; Object.keys(VENUES).forEach((id) => { const v = VENUES[id], fv = state.fc.venues[v.fc]; venues[id] = { lat: fv.lat, lon: fv.lon, center: v.center, marine: id === "argo" ? [43.62, -79.42] : null, water: waterTempFor(id) }; });
+    const venues = {}; Object.keys(VENUES).forEach((id) => { const v = VENUES[id], fv = state.fc.venues[v.fc]; venues[id] = { lat: fv.lat, lon: fv.lon, center: v.center, marine: id === "argo" ? [43.62, -79.42] : null, water: waterTempFor(id), fetchM: v.fetchM }; });
     await idbSet(db, "watches", targets); await idbSet(db, "settings", { limits: state.limits, venues });
   } catch (e) { console.warn("sync watches", e); }
 }

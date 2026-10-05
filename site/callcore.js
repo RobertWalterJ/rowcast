@@ -63,7 +63,7 @@ function callCore(o) {
   const steam = wt - tmin >= 8 && wmax < 15; const spread = Math.min(...ix.map((i) => h.t[i] - h.dew[i]));
   f.vis = { v: vmin, steam, spread, cls: lvl(vmin <= L.visS ? 2 : vmin <= L.visC || steam || spread <= 1 ? 1 : 0) };
   let hs = null; if (o.waves) { const wv = o.waves; const wi = wv.time.map((t, i) => i).filter((i) => wv.time[i] >= hr(start) && wv.time[i] < end); if (wi.length) hs = Math.max(...wi.map((i) => wv.hs[i] || 0)); }
-  if (hs == null) { const U = wmax / 3.6; hs = 0.0016 * U * Math.sqrt(800 / 9.81); f.waveEst = true; }
+  if (hs == null) { const U = wmax / 3.6; hs = 0.0016 * U * Math.sqrt((o.fetchM || 800) / 9.81); f.waveEst = true; }
   f.waves = { v: hs, cls: lvl(hs >= L.waveS ? 2 : hs >= L.waveC ? 1 : 0) };
   const fmin = mn("feels"); f.cold = { v: fmin, water: wt, cls: lvl(fmin <= L.feelsC || wt < 15 ? 1 : 0) };
   const wc = whitecaps(wmax, gmax); f.wcap = { ...wc, cls: lvl(wc.lvl >= 3 ? 2 : wc.lvl === 2 ? 1 : 0) };
