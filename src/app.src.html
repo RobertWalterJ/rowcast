@@ -157,6 +157,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .c-go{color:var(--go)} .c-caution{color:var(--caution)} .c-stop{color:var(--stop)} .c-none{color:var(--muted)}
 .wchips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .wchips .chip{background:var(--surface);box-shadow:none;backdrop-filter:none}
+.wchips .chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .factors{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .factor{border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
 .factor .top{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
