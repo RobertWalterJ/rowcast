@@ -1,5 +1,5 @@
 /* RowCast service worker. VERSION and PRECACHE are filled in by scripts/build_site.py. */
-const VERSION = "e4ce14823e";
+const VERSION = "88f8fc0307";
 const PRECACHE = ["./", "apple-touch-icon.png", "fc.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "index.html", "map_argo.json", "map_trent.json", "maplibre-gl.js", "relief.json", "relief_argo.png", "relief_trent.png", "shell_1x.png", "shell_2x.png", "shell_4x.png", "shell_8p.png", "suncalc.js", "wx.json"];
 const FONTS = "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap";
 const SHELL = "rowcast-shell-" + VERSION, RUNTIME = "rowcast-runtime";

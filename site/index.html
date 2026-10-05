@@ -1229,6 +1229,9 @@ async function boot() {
 const booted = boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML("beforeend", `<div class="toast on">Could not load the prototype data</div>`); });
 if ("serviceWorker" in navigator) addEventListener("load", () => {
   navigator.serviceWorker.register("sw.js").catch((e) => console.warn("sw", e));
+  // A new version took over: reload once so the phone shows it now, not on the next launch.
+  const had = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (had && !reloaded) { reloaded = true; location.reload(); } });
   // The app used to live at /rowcast/. Remove that old worker so it cannot answer for this page.
   navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => { if (new URL(r.scope).pathname === "/rowcast/") r.unregister(); })).catch(() => {});
 });
