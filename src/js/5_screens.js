@@ -47,8 +47,9 @@ function renderTime() {
   const W = state.wx[state.venue].wind; $("hourSlider").max = W.time.length - 1; $("hourSlider").value = state.hour;
   const t = W.time[Math.min(state.hour, W.time.length - 1)];
   $("timeLbl").textContent = `${wdLbl(t)} ${t.slice(11)}`;
-  const diff = Math.round((localToDate(t) - Date.now()) / 3600e3);
-  $("timeRel").textContent = diff <= 0 ? "now" : `in ${diff} h`;
+  const diff = Math.round((localToDate(t) - Date.now()) / 3600e3); const st = dataStamp();
+  $("timeRel").textContent = (diff === 0 ? "now" : diff < 0 ? `${-diff} h ago` : `in ${diff} h`) + (st.live ? " · live" : " · saved");
+  $("timeRel").classList.toggle("c-caution", !st.live);
 }
 function setHour(h) { state.hour = h; renderTime(); updateWindPts(); overlay.dirty = true; overlay.resetTrails(); }
 
@@ -114,7 +115,7 @@ function renderCall() {
     </div>`;
   }
   html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
-  html += `<p class="proto">Prototype · forecast snapshot from ${esc(new Date(state.fc.updated).toLocaleString("en-CA", { timeZone: TZ, weekday: "short", hour: "2-digit", minute: "2-digit" }))}</p>`;
+  html += `<p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)}</p>`;
   $("callInner").innerHTML = html; fillWater();
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
@@ -151,7 +152,7 @@ function renderForecast() {
     <div class="ribbon">${s}</div></div>
   <div class="days">${days.map(({ d, i }) => `<div class="day"><b>${esc(wdLbl(d + "T12:00"))}</b><span class="small muted">${esc(WX[v.daily.weather_code[i]] || "")}</span><span class="big">${Math.round(v.daily.temperature_2m_max[i])}° <span class="muted" style="font-weight:600">${Math.round(v.daily.temperature_2m_min[i])}°</span></span><span class="small">gusts ${spd(v.daily.wind_gusts_10m_max[i])} ${uLbl()}</span><span class="small">${v.daily.precipitation_sum[i].toFixed(1)} mm</span></div>`).join("")}</div>
   ${(v.alerts || []).length ? `<div class="card"><h2>Active alerts</h2>${v.alerts.map((a) => `<details><summary><b style="color:var(--caution)">${esc(a.name)}</b> <span class="small muted">${esc(a.area)}</span></summary><p class="small" style="white-space:pre-line">${esc(a.text)}</p></details>`).join("")}</div>` : ""}
-  <p class="proto">Open-Meteo forecast snapshot · Environment Canada alerts</p>`;
+  <p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)} · Open-Meteo, Environment Canada</p>`;
 }
 
 /* ================= light ================= */

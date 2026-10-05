@@ -218,7 +218,7 @@ async function selectEvent(id) { const e = state.events.find((x) => x.id === id)
 async function switchVenue() {
   renderContext(); renderQuickChips(); renderTime();
   if (mapReady) { await loadVenueData(); buildLayers(); map.jumpTo({ center: V().center, zoom: V().zoom }); overlay.seed(); overlay.dirty = true; }
-  refreshScreen();
+  refreshScreen(); liveRefresh();
 }
 function refreshScreen() { renderContext(); if (state.screen !== "map") go(state.screen); else { overlay.dirty = true; } }
 
@@ -242,6 +242,7 @@ async function boot() {
   $("playBtn").onclick = () => { state.playing = !state.playing; $("playBtn").innerHTML = state.playing ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>' : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>';
     clearInterval(state._pt); if (state.playing) state._pt = setInterval(() => setHour((state.hour + 1) % state.wx[state.venue].wind.time.length), 900); };
   initMap();
+  liveRefresh();
   setInterval(() => { if (state.screen === "races") renderRaces(); renderContext(); }, 60000);
 }
 const booted = boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML("beforeend", `<div class="toast on">Could not load the prototype data</div>`); });
