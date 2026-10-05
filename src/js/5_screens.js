@@ -81,9 +81,9 @@ function renderCall() {
       const p = (a) => [60 + 50 * Math.cos(a), 60 + 50 * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1);
       return `<path d="M${x0} ${y0} A50 50 0 0 1 ${x1} ${y1}" stroke="var(--${s})" stroke-width="10" fill="none" stroke-linecap="round"/>`; }).join("")}</svg>`; };
   let html = `<div><div class="eyebrow">${esc(ev ? ev.name : V().name)}</div><h1>Row call</h1></div>
-  <div class="wchips">${quick.map(([s, l]) => `<button class="chip" data-s="${s}" aria-pressed="${s === win.start}">${esc(l)}</button>`).join("")}</div>
+  <div class="wchips">${quick.map(([s, l]) => `<button class="chip" data-s="${s}" aria-pressed="${s === win.start}">${esc(l)}</button>`).join("")}${presetChips()}</div>
   <div class="card"><div class="row2"><label class="field">Launch<input type="datetime-local" id="pStart" value="${win.start}"></label>
-    <label class="field">Length<select id="pDur">${[45, 60, 90, 120, 180].map((m) => `<option value="${m}" ${m === win.dur ? "selected" : ""}>${m < 60 ? m + " min" : m / 60 + " h"}</option>`).join("")}</select></label></div></div>`;
+    <label class="field">Length<select id="pDur">${[45, 60, 90, 120, 180].map((m) => `<option value="${m}" ${m === win.dur ? "selected" : ""}>${m < 60 ? m + " min" : m / 60 + " h"}</option>`).join("")}</select></label></div></div>${savePresetRow(win)}`;
   if (!c) html += `<div class="empty">No forecast covers that window yet. The forecast runs about four days ahead.</div>`;
   else {
     const f = c.f;
@@ -101,10 +101,10 @@ function renderCall() {
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
   }
-  if (c) html += whitecapCard(c.f) + runCard(win);
+  if (c) html += whitecapCard(c.f) + buoyCardHtml() + runCard(win);
   html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)}</p>`;
-  $("callInner").innerHTML = html; fillWater(); wireCall(c, win); wireWatch(c, win);
+  $("callInner").innerHTML = html; fillWater(); wireCall(c, win); wireWatch(c, win); wirePresets(win);
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };

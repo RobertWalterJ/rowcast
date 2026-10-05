@@ -53,6 +53,9 @@ src/js/8_live.js      live rain radar loop (MSC GeoMet) and water levels (CHS, W
 src/js/9_forecast_live.js  live forecast refresh (Open-Meteo, ECCC alerts) replacing the build-time snapshot
 src/js/a_run.js       whitecap card, spots along the run, share with crew
 src/js/b_watch.js     "Watch this row": alerts when the call changes (page side; the service worker does the background side)
+src/js/c_card.js      "Share as a picture" conditions card (canvas, 1080 x 1350, never states a verdict)
+src/js/d_log.js       row log: GPX/TCX import, weather lookup for past rows, how-it-felt assessment, insights
+src/js/e_extras.js    calendar (.ics) export, saved launch times, measured buoy card, desktop notes
 Files in src/js are concatenated in filename order, so keep the 0_ to 9_ then a_ prefixes.
 src/maplibre.css      MapLibre 4.7.1 CSS (inlined at build)
 site/                 deployable output: index.html + data files + Blender sprites
@@ -179,3 +182,10 @@ This app shares `https://robertwalterj.github.io/` with all of Robert's other ap
 - Obvious whitecaps are a no: scattered is a caution, many is stay ashore (estimated from wind and gusts, never observed).
 - A crew check-in or shared accounts feature was considered and dropped: the crew will not use the app, and it would need a real security review.
 - Background alerts depend on Chrome's Periodic Background Sync (installed app, Chrome decides the timing). Foreground checks run on every forecast refresh.
+
+## Live data and what needs a server (Oct 2026)
+
+- Live in the browser (CORS ok): Open-Meteo forecast and marine, ECCC alerts, GeoMet radar and lightning, CHS water levels, Water Survey of Canada levels, CHS ENC chart (egisp.dfo-mpo.gc.ca WMS).
+- NDBC buoy 45139 is not readable from a browser, so `scripts/fetch_buoy.py` runs in the Pages deploy job (every 30 minutes) and writes `site/buoy.json`, which is git-ignored and excluded from the precache.
+- Strava and Garmin: no account link. Strava OAuth needs a server-side client secret and Garmin Connect is partner-only. The bridge is importing exported GPX or TCX files (file picker or Android share target).
+- The share card and share text never say go or stay ashore. The call is the crew's.

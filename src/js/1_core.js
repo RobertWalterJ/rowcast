@@ -57,5 +57,6 @@ const V = () => VENUES[state.venue];
 function fcVenue() { return state.fc && state.fc.venues && state.fc.venues[V().fc]; }
 function waterTemp() {
   if (V().water != null) return V().water;
+  const bo = state.buoy && state.buoy.obs && state.buoy.obs.find((x) => x.wtmp != null); if (bo && Date.now() - Date.parse(bo.t) < 36e5 * 12) return bo.wtmp;
   const b = fcVenue() && fcVenue().buoy; const o = b && b.obs && b.obs.find((x) => x.wtmp != null); return o ? o.wtmp : 15;
 }

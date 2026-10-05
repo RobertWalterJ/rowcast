@@ -1,7 +1,7 @@
 /* RowCast service worker. VERSION and PRECACHE are filled in by scripts/build_site.py. */
 self.window = self; // suncalc.js expects a browser global
 importScripts("callcore.js", "suncalc.js"); // the same go / caution / stay ashore rules the page uses
-const VERSION = "c4574f3c00";
+const VERSION = "b4177911e1";
 const PRECACHE = ["./", "apple-touch-icon.png", "callcore.js", "fc.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "index.html", "map_argo.json", "map_trent.json", "maplibre-gl.js", "relief.json", "relief_argo.png", "relief_trent.png", "shell_1x.png", "shell_2x.png", "shell_4x.png", "shell_8p.png", "suncalc.js", "wx.json"];
 const FONTS = "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap";
 const SHELL = "rowcast-shell-" + VERSION, RUNTIME = "rowcast-runtime";

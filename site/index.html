@@ -91,6 +91,17 @@ h1,h2,h3{margin:0;text-wrap:balance}
 body.radar-on .legendmini{bottom:196px}
 .lim{font-size:.72rem;color:var(--muted);margin-top:-2px}
 .sharerow{display:flex;gap:8px;flex-wrap:wrap}
+.wchips .pchip{flex:none;display:flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:44px}
+.pchip button{background:none;border:0;font:inherit;font-weight:600;font-size:.8rem;color:var(--ink);cursor:pointer}.pchip .pgo{padding:6px 4px 6px 13px}.pchip .px{padding:6px 12px 6px 4px;color:var(--muted);font-size:1.15rem;line-height:1}
+.btn.small{font-size:.85rem;padding:8px 12px;font-weight:600}
+.buoygrid{display:flex;gap:22px;flex-wrap:wrap;margin:8px 0}.buoygrid > div{display:flex;flex-direction:column;gap:2px}.buoygrid .k{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.buoygrid b{font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums}.buoygrid b small{font-size:.8rem;color:var(--muted);font-weight:600}
+@media (min-width:1000px){
+  .page-inner{max-width:1160px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+  .page-inner > :first-child,.page-inner > .wchips,.page-inner > .sharerow,.page-inner > .watchrow,.page-inner > .proto,.page-inner > .factors,.page-inner > .days,.page-inner > .empty,.page-inner > p,.page-inner > .card:has(.ribbon){grid-column:1/-1}
+  .factors{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .sheet{max-width:760px;margin-left:auto;margin-right:auto}
+}
 .loglist{display:flex;flex-direction:column;gap:10px;margin-top:14px}
 .logcard{display:flex;gap:12px;align-items:center;justify-content:space-between;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;cursor:pointer;color:var(--ink);font:inherit}
 .lgtxt{display:flex;flex-direction:column;gap:3px;min-width:0}.lgchips{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
@@ -489,6 +500,7 @@ const V = () => VENUES[state.venue];
 function fcVenue() { return state.fc && state.fc.venues && state.fc.venues[V().fc]; }
 function waterTemp() {
   if (V().water != null) return V().water;
+  const bo = state.buoy && state.buoy.obs && state.buoy.obs.find((x) => x.wtmp != null); if (bo && Date.now() - Date.parse(bo.t) < 36e5 * 12) return bo.wtmp;
   const b = fcVenue() && fcVenue().buoy; const o = b && b.obs && b.obs.find((x) => x.wtmp != null); return o ? o.wtmp : 15;
 }
 
@@ -1078,9 +1090,9 @@ function renderCall() {
       const p = (a) => [60 + 50 * Math.cos(a), 60 + 50 * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1);
       return `<path d="M${x0} ${y0} A50 50 0 0 1 ${x1} ${y1}" stroke="var(--${s})" stroke-width="10" fill="none" stroke-linecap="round"/>`; }).join("")}</svg>`; };
   let html = `<div><div class="eyebrow">${esc(ev ? ev.name : V().name)}</div><h1>Row call</h1></div>
-  <div class="wchips">${quick.map(([s, l]) => `<button class="chip" data-s="${s}" aria-pressed="${s === win.start}">${esc(l)}</button>`).join("")}</div>
+  <div class="wchips">${quick.map(([s, l]) => `<button class="chip" data-s="${s}" aria-pressed="${s === win.start}">${esc(l)}</button>`).join("")}${presetChips()}</div>
   <div class="card"><div class="row2"><label class="field">Launch<input type="datetime-local" id="pStart" value="${win.start}"></label>
-    <label class="field">Length<select id="pDur">${[45, 60, 90, 120, 180].map((m) => `<option value="${m}" ${m === win.dur ? "selected" : ""}>${m < 60 ? m + " min" : m / 60 + " h"}</option>`).join("")}</select></label></div></div>`;
+    <label class="field">Length<select id="pDur">${[45, 60, 90, 120, 180].map((m) => `<option value="${m}" ${m === win.dur ? "selected" : ""}>${m < 60 ? m + " min" : m / 60 + " h"}</option>`).join("")}</select></label></div></div>${savePresetRow(win)}`;
   if (!c) html += `<div class="empty">No forecast covers that window yet. The forecast runs about four days ahead.</div>`;
   else {
     const f = c.f;
@@ -1098,10 +1110,10 @@ function renderCall() {
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
   }
-  if (c) html += whitecapCard(c.f) + runCard(win);
+  if (c) html += whitecapCard(c.f) + buoyCardHtml() + runCard(win);
   html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)}</p>`;
-  $("callInner").innerHTML = html; fillWater(); wireCall(c, win); wireWatch(c, win);
+  $("callInner").innerHTML = html; fillWater(); wireCall(c, win); wireWatch(c, win); wirePresets(win);
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };
@@ -1294,11 +1306,12 @@ function openRace(r) {
    <div class="row2"><label class="field">Bow number<input id="rBow" inputmode="numeric" value="${esc(r.bow)}"></label><label class="field">Start time<input id="rStart" type="datetime-local" value="${r.start}"></label></div>
    <div class="row2"><label class="field">Marshal (min before start)<input id="rMarshal" type="number" value="${r.marshal}"></label><label class="field">Launch (min before marshal)<input id="rLaunch" type="number" value="${r.launch}"></label></div>
    <label class="field">Pace per 500 m (minutes)<input id="rPace" type="number" step="0.05" value="${r.pace}"></label>
-   <div style="display:flex;gap:8px">${isNew ? "" : '<button class="btn" id="rDel" style="color:var(--stop)">Delete</button>'}<button class="btn primary" id="rSave" style="flex:1">${isNew ? "Add race" : "Save"}</button></div>`, (b) => {
+   <div style="display:flex;gap:8px">${isNew ? "" : '<button class="btn" id="rCal">Add to calendar</button><button class="btn" id="rDel" style="color:var(--stop)">Delete</button>'}<button class="btn primary" id="rSave" style="flex:1">${isNew ? "Add race" : "Save"}</button></div>`, (b) => {
     let boat = r.boat; b.querySelectorAll("[data-b]").forEach((x) => x.onclick = () => { boat = x.dataset.b; b.querySelectorAll("[data-b]").forEach((y) => y.setAttribute("aria-pressed", y.dataset.b === boat)); });
     b.querySelector("#rSave").onclick = () => { Object.assign(r, { title: b.querySelector("#rTitle").value || "Untitled race", boat, bow: b.querySelector("#rBow").value, start: b.querySelector("#rStart").value || r.start,
       marshal: +b.querySelector("#rMarshal").value || 0, launch: +b.querySelector("#rLaunch").value || 0, pace: +b.querySelector("#rPace").value || 2.2, example: false });
       if (isNew) state.races.push(r); save(); closeSheet(); renderRaces(); renderContext(); toast(isNew ? "Race added" : "Race saved"); };
+    const rc = b.querySelector("#rCal"); if (rc) rc.onclick = () => downloadIcs(`Race: ${r.title}`, addMin(r.start, -(r.marshal + r.launch)), r.marshal + r.launch + 60, `Bow ${r.bow || "?"}, ${r.boat}. Start ${r.start.slice(11)}, marshal ${addMin(r.start, -r.marshal).slice(11)}, launch ${addMin(r.start, -(r.marshal + r.launch)).slice(11)}.`, V().name);
     const del = b.querySelector("#rDel"); if (del) del.onclick = () => { state.races = state.races.filter((x) => x.id !== r.id); save(); closeSheet(); renderRaces(); toast("Race removed"); };
   });
 }
@@ -1775,7 +1788,7 @@ function addSpotFlow() {
 
 /* ---------- share the Row call with the crew ---------- */
 function shareRow() {
-  return `<div class="sharerow"><button class="btn primary" id="btnShare">Share with crew</button><button class="btn" id="btnCard">Share as a picture</button><button class="btn" id="btnCopy">Copy text</button></div>`;
+  return `<div class="sharerow"><button class="btn primary" id="btnShare">Share with crew</button><button class="btn" id="btnCard">Share as a picture</button><button class="btn" id="btnCal">Add to calendar</button><button class="btn" id="btnCopy">Copy text</button></div>`;
 }
 function shareText(c, win) {
   const v = V(), ev = activeEvent(), f = c.f; const wc = whitecaps(f.wind.v, f.wind.g);
@@ -2194,6 +2207,76 @@ booted.then(async () => {
   try { const db = await idbOpen(); const sh = (await idbGet(db, "shared")) || []; await idbSet(db, "shared", []); history.replaceState({ rc: "root" }, "", location.pathname);
     if (sh.length) importFiles(sh.map((x) => ({ name: x.name, text: async () => x.text }))); } catch (e) { console.warn("shared files", e); }
 });
+
+/* ================= extras: calendar export, saved launch times, measured buoy waves ================= */
+
+/* ---------- add a row or a race to the phone calendar (.ics) ---------- */
+const icsEsc = (s) => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+const icsStamp = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+function downloadIcs(title, startLocal, durMin, desc, where) {
+  const s = localToDate(startLocal), e = new Date(s.getTime() + durMin * 60000);
+  const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//RowCast//EN", "CALSCALE:GREGORIAN", "BEGIN:VEVENT", `UID:${Date.now()}-${Math.random().toString(36).slice(2, 8)}@rowcast`, `DTSTAMP:${icsStamp(new Date())}`,
+    `DTSTART:${icsStamp(s)}`, `DTEND:${icsStamp(e)}`, `SUMMARY:${icsEsc(title)}`, `LOCATION:${icsEsc(where)}`, `DESCRIPTION:${icsEsc(desc)}`,
+    "BEGIN:VALARM", "TRIGGER:-PT60M", "ACTION:DISPLAY", "DESCRIPTION:Check the conditions", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" })); a.download = "row.ics"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("Calendar file ready. Open it to add the event.");
+}
+function addRowToCalendar(c, win) {
+  const ev = activeEvent(); const f = c.f;
+  downloadIcs(`Row: ${ev ? ev.name : V().name}`, win.start, win.dur,
+    `Forecast when added: wind ${spd(f.wind.v)} ${uLbl()}, gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}; waves ${f.waves.v.toFixed(1)} m; whitecaps ${f.wcap.short}; rain ${rainWord(f.storm.rainMax)}.\nCheck RowCast before you launch: ${shareUrl(win)}`, V().name + ", " + V().place);
+}
+
+/* ---------- saved launch times (for example Tuesday 06:30) ---------- */
+state.presets = store.get("presets", []);   // { id, dow 0-6, time "HH:MM", dur }
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const dowOf = (d) => DOW.indexOf(wdLbl(d + "T12:00"));
+function nextOccurrence(p) {
+  const now = nowLocal();
+  for (let k = 0; k < 8; k++) { const d = torLocal(new Date(Date.now() + k * 864e5)).slice(0, 10); const t = `${d}T${p.time}`; if (dowOf(d) === p.dow && t > now) return t; }
+  return null;
+}
+const presetLabel = (p) => `${DOW[p.dow]} ${p.time}`;
+function presetChips() {
+  const chips = state.presets.map((p) => `<span class="chip pchip" data-p="${p.id}"><button class="pgo" data-pgo="${p.id}">★ ${presetLabel(p)}</button><button class="px" data-pdel="${p.id}" aria-label="Remove saved time ${presetLabel(p)}">×</button></span>`).join("");
+  return chips;
+}
+function savePresetRow(win) {
+  const dow = dowOf(win.start.slice(0, 10)), time = win.start.slice(11);
+  const has = state.presets.some((p) => p.dow === dow && p.time === time && p.dur === win.dur);
+  return has ? "" : `<button class="btn small" id="btnSavePreset">★ Save ${DOW[dow]} ${time} as a regular launch time</button>`;
+}
+function wirePresets(win) {
+  const root = $("callInner");
+  root.querySelectorAll("[data-pgo]").forEach((b) => b.onclick = () => { const p = state.presets.find((x) => x.id === b.dataset.pgo); const t = nextOccurrence(p); if (t) { state.plan = { start: t, dur: p.dur }; renderCall(); renderContext(); } });
+  root.querySelectorAll("[data-pdel]").forEach((b) => b.onclick = () => { state.presets = state.presets.filter((x) => x.id !== b.dataset.pdel); store.set("presets", state.presets); renderCall(); });
+  const sp = $("btnSavePreset"); if (sp) sp.onclick = () => { const dow = dowOf(win.start.slice(0, 10)); state.presets.push({ id: "p" + Date.now(), dow, time: win.start.slice(11), dur: win.dur }); store.set("presets", state.presets); toast("Saved. It shows as a button above."); renderCall(); };
+  const cal = $("btnCal"); if (cal) cal.onclick = () => { const c = computeCall(win); if (c) addRowToCalendar(c, win); };
+}
+
+/* ---------- measured buoy (Toronto side of the lake) ---------- */
+// NDBC does not allow browser reads, so the deploy job saves buoy.json next to the app every 30 minutes (see .github/workflows/pages.yml).
+state.buoy = null;
+async function loadBuoy() {
+  try { const r = await fetch("buoy.json", { cache: "no-store" }); if (!r.ok) throw new Error(r.status); state.buoy = await r.json(); } catch (e) { state.buoy = null; }
+  if (state.screen === "call") renderCall();
+}
+function buoyObs() { const b = state.buoy; if (!b || !b.obs || !b.obs.length) return null; const o = b.obs.find((x) => x.wvht != null || x.wspd != null); return o ? { b, o } : null; }
+function buoyCardHtml() {
+  if (state.venue !== "argo") return "";
+  const got = buoyObs();
+  if (!got) return `<div class="card" id="buoyCard"><div class="top" style="font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Measured on the lake</div><p class="small muted" style="margin-top:6px">No recent reading from the lake buoy. It is usually taken out of the water from late fall to spring, and the reading needs the live site to refresh.</p></div>`;
+  const { b, o } = got; const when = new Date(o.t); const age = Math.round((Date.now() - when) / 60000); const old = age > 180;
+  const fv = fcVenue(); let model = null; if (fv && fv.waves) { const k = fv.waves.time.indexOf(torLocal(when).slice(0, 13) + ":00"); if (k >= 0) model = fv.waves.hs[k]; }
+  const hm2 = when.toLocaleTimeString("en-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
+  return `<div class="card" id="buoyCard"><div class="top" style="font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Measured on the lake</div>
+    <div class="buoygrid">${o.wvht != null ? `<div><span class="k">Waves</span><b>${o.wvht.toFixed(1)}<small> m</small></b>${o.dpd ? `<span class="small muted">${o.dpd} s apart</span>` : ""}</div>` : ""}
+      ${o.wspd != null ? `<div><span class="k">Wind</span><b>${spd(o.wspd * 3.6)}<small> ${uLbl()}</small></b><span class="small muted">${o.gst != null ? `gusts ${spd(o.gst * 3.6)}` : ""}${o.wdir != null ? ` from ${compass(o.wdir)}` : ""}</span></div>` : ""}
+      ${o.wtmp != null ? `<div><span class="k">Water</span><b>${Math.round(o.wtmp)}<small> °C</small></b></div>` : ""}</div>
+    <p class="small muted">${esc(b.name)} at ${hm2}${old ? `, ${Math.round(age / 60)} h old` : ""}.${model != null && o.wvht != null ? ` The forecast model said ${model.toFixed(1)} m for that hour.` : ""} It sits out in the lake, not at your club, so waves inside the breakwall are usually smaller.</p></div>`;
+}
+booted.then(() => loadBuoy());
+setInterval(() => { if (!document.hidden) loadBuoy(); }, 30 * 60000);
 
 </script>
 </body></html>

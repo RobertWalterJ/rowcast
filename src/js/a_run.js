@@ -54,7 +54,7 @@ function addSpotFlow() {
 
 /* ---------- share the Row call with the crew ---------- */
 function shareRow() {
-  return `<div class="sharerow"><button class="btn primary" id="btnShare">Share with crew</button><button class="btn" id="btnCard">Share as a picture</button><button class="btn" id="btnCopy">Copy text</button></div>`;
+  return `<div class="sharerow"><button class="btn primary" id="btnShare">Share with crew</button><button class="btn" id="btnCard">Share as a picture</button><button class="btn" id="btnCal">Add to calendar</button><button class="btn" id="btnCopy">Copy text</button></div>`;
 }
 function shareText(c, win) {
   const v = V(), ev = activeEvent(), f = c.f; const wc = whitecaps(f.wind.v, f.wind.g);

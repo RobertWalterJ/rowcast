@@ -4,3 +4,4 @@ shots/
 __pycache__/
 *.npy
 node_modules/
+site/buoy.json

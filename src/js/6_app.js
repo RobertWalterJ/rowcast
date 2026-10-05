@@ -124,11 +124,12 @@ function openRace(r) {
    <div class="row2"><label class="field">Bow number<input id="rBow" inputmode="numeric" value="${esc(r.bow)}"></label><label class="field">Start time<input id="rStart" type="datetime-local" value="${r.start}"></label></div>
    <div class="row2"><label class="field">Marshal (min before start)<input id="rMarshal" type="number" value="${r.marshal}"></label><label class="field">Launch (min before marshal)<input id="rLaunch" type="number" value="${r.launch}"></label></div>
    <label class="field">Pace per 500 m (minutes)<input id="rPace" type="number" step="0.05" value="${r.pace}"></label>
-   <div style="display:flex;gap:8px">${isNew ? "" : '<button class="btn" id="rDel" style="color:var(--stop)">Delete</button>'}<button class="btn primary" id="rSave" style="flex:1">${isNew ? "Add race" : "Save"}</button></div>`, (b) => {
+   <div style="display:flex;gap:8px">${isNew ? "" : '<button class="btn" id="rCal">Add to calendar</button><button class="btn" id="rDel" style="color:var(--stop)">Delete</button>'}<button class="btn primary" id="rSave" style="flex:1">${isNew ? "Add race" : "Save"}</button></div>`, (b) => {
     let boat = r.boat; b.querySelectorAll("[data-b]").forEach((x) => x.onclick = () => { boat = x.dataset.b; b.querySelectorAll("[data-b]").forEach((y) => y.setAttribute("aria-pressed", y.dataset.b === boat)); });
     b.querySelector("#rSave").onclick = () => { Object.assign(r, { title: b.querySelector("#rTitle").value || "Untitled race", boat, bow: b.querySelector("#rBow").value, start: b.querySelector("#rStart").value || r.start,
       marshal: +b.querySelector("#rMarshal").value || 0, launch: +b.querySelector("#rLaunch").value || 0, pace: +b.querySelector("#rPace").value || 2.2, example: false });
       if (isNew) state.races.push(r); save(); closeSheet(); renderRaces(); renderContext(); toast(isNew ? "Race added" : "Race saved"); };
+    const rc = b.querySelector("#rCal"); if (rc) rc.onclick = () => downloadIcs(`Race: ${r.title}`, addMin(r.start, -(r.marshal + r.launch)), r.marshal + r.launch + 60, `Bow ${r.bow || "?"}, ${r.boat}. Start ${r.start.slice(11)}, marshal ${addMin(r.start, -r.marshal).slice(11)}, launch ${addMin(r.start, -(r.marshal + r.launch)).slice(11)}.`, V().name);
     const del = b.querySelector("#rDel"); if (del) del.onclick = () => { state.races = state.races.filter((x) => x.id !== r.id); save(); closeSheet(); renderRaces(); toast("Race removed"); };
   });
 }

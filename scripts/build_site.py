@@ -21,7 +21,7 @@ shutil.copy(src("js", "0_callcore.js"), os.path.join(ROOT, "site", "callcore.js"
 # PWA: copy the manifest, then write sw.js with a precache list of everything in site/ and a content-hash version.
 shutil.copy(src("manifest.webmanifest"), os.path.join(ROOT, "site", "manifest.webmanifest"))
 site = os.path.join(ROOT, "site")
-files = sorted(f for f in os.listdir(site) if f != "sw.js" and os.path.isfile(os.path.join(site, f)))
+files = sorted(f for f in os.listdir(site) if f not in ("sw.js", "buoy.json") and os.path.isfile(os.path.join(site, f)))
 h = hashlib.sha256()
 for f in files: h.update(f.encode()); h.update(open(os.path.join(site, f), "rb").read())
 sw = open(src("sw.js")).read().replace("/*VERSION*/", h.hexdigest()[:10]).replace("/*PRECACHE*/", json.dumps(["./"] + [f for f in files if f != "manifest.webmanifest"]))
