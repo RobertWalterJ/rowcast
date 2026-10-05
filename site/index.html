@@ -91,6 +91,9 @@ h1,h2,h3{margin:0;text-wrap:balance}
 body.radar-on .legendmini{bottom:196px}
 .lim{font-size:.72rem;color:var(--muted);margin-top:-2px}
 .sharerow{display:flex;gap:8px;flex-wrap:wrap}
+.ltg .top{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ltg .bolt{font-size:1.2rem}.ltgmain{font-size:1.05rem;margin:6px 0 4px}.ltg .note{font-size:.78rem;color:var(--muted)}
+.ltg.stop{border-color:var(--stop);box-shadow:inset 6px 0 0 var(--stop)}.ltg.caution{border-color:var(--caution);box-shadow:inset 6px 0 0 var(--caution)}
 .watchrow{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .alertbar{position:absolute;z-index:80;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 74px);display:flex;flex-direction:column;gap:8px}
 .alertitem{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--caution);border-radius:14px;box-shadow:var(--shadow);padding:10px 12px}
@@ -345,10 +348,13 @@ function callCore(o) {
   const f = {}; let worst = 0; const lvl = (x) => { worst = Math.max(worst, x); return ["go", "caution", "stop"][x]; };
   const wmax = mx("wind"), gmax = mx("gust"), di = ix[Math.floor(ix.length / 2)], dir = h.dir[di];
   f.wind = { v: wmax, g: gmax, dir, di, cls: lvl(wmax >= L.windS || gmax >= L.gustS ? 2 : wmax >= L.windC || gmax >= L.gustC ? 1 : 0) };
-  const thunder = ix2.some((i) => h.code[i] >= 95);
+  // Real strikes close by and recent (Canadian Lightning Detection Network) count as thunder when the row is soon.
+  const L1 = o.lightning, soon = localToDate(start).getTime() - Date.now() < 2 * 3600e3;
+  const lightning = L1 && L1.nearestKm != null && L1.nearestKm <= 30 && L1.minutesAgo <= 30 && soon ? { km: L1.nearestKm, min: L1.minutesAgo } : null;
+  const thunder = ix2.some((i) => h.code[i] >= 95) || !!lightning;
   const maybe = !thunder && ix2.some((i) => (h.cape[i] || 0) >= 800 && (h.pop[i] || 0) >= 30);
   const rainMax = Math.max(0, ...ix.map((i) => h.rain[i] || 0));
-  f.storm = { v: thunder, maybe, pop: mx("pop"), rain: ix.reduce((a, i) => a + (h.rain[i] || 0), 0), rainMax, cls: lvl(thunder || rainMax >= RAIN_STOP ? 2 : maybe || rainMax >= RAIN_CAUTION ? 1 : 0) };
+  f.storm = { v: thunder, lightning, maybe, pop: mx("pop"), rain: ix.reduce((a, i) => a + (h.rain[i] || 0), 0), rainMax, cls: lvl(thunder || rainMax >= RAIN_STOP ? 2 : maybe || rainMax >= RAIN_CAUTION ? 1 : 0) };
   const vmin = mn("vis") / 1000; const wt = o.waterTemp; const tmin = mn("t");
   const steam = wt - tmin >= 8 && wmax < 15; const spread = Math.min(...ix.map((i) => h.t[i] - h.dew[i]));
   f.vis = { v: vmin, steam, spread, cls: lvl(vmin <= L.visS ? 2 : vmin <= L.visC || steam || spread <= 1 ? 1 : 0) };
@@ -362,7 +368,7 @@ function callCore(o) {
   if (dark) worst = Math.max(worst, 1);
   return { cls: ["go", "caution", "stop"][worst], word: ["Go", "Caution", "Stay ashore"][worst], f, start, end, code: h.code[di], temp: h.t[di] };
 }
-const stormWord = (s) => (s.v ? "thunderstorm forecast" : s.maybe ? "thunder possible" : rainWord(s.rainMax));
+const stormWord = (s) => (s.lightning ? "lightning detected nearby" : s.v ? "thunderstorm forecast" : s.maybe ? "thunder possible" : rainWord(s.rainMax));
 
 /* ---------- change detection for watched rows ---------- */
 const FACTORS = { wind: "Wind", waves: "Waves", vis: "Visibility", storm: "Rain and storms", cold: "Cold", light: "Light", wcap: "Whitecaps" };
@@ -375,8 +381,8 @@ function watchSummary(c) {
 function diffCall(base, now) {
   if (!base) return [];
   const rank = { go: 0, caution: 1, stop: 2 }; const out = [];
-  if (now.thunder && !base.thunder) out.push("Thunderstorm is now forecast around your row.");
-  if (!now.thunder && base.thunder) out.push("The thunderstorm risk has cleared.");
+  if (now.thunder && !base.thunder) out.push("Thunder or lightning is now a risk around your row.");
+  if (!now.thunder && base.thunder) out.push("The thunder and lightning risk has cleared.");
   if (rank[now.cls] !== rank[base.cls]) out.push(`The call went from ${base.word} to ${now.word}.`);
   Object.keys(FACTORS).forEach((k) => { if (rank[now.fc[k]] !== rank[base.fc[k]] && !(k === "storm" && now.thunder !== base.thunder)) out.push(`${FACTORS[k]}: ${base.fc[k]} to ${now.fc[k]} (${now.val[k]}).`); });
   return out;
@@ -387,6 +393,34 @@ const IDB_NAME = "rowcast-watch";
 const idbOpen = () => new Promise((res, rej) => { const q = indexedDB.open(IDB_NAME, 1); q.onupgradeneeded = () => q.result.createObjectStore("kv"); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
 const idbGet = (db, k) => new Promise((res, rej) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
 const idbSet = (db, k, v) => new Promise((res, rej) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); });
+
+
+/* ---------- lightning: Canadian Lightning Detection Network via Environment Canada GeoMet ---------- */
+const GEOMET_URL = "https://geo.weather.gc.ca/geomet";
+async function fetchTimeRange(layer) {
+  const t = await fetch(`${GEOMET_URL}?service=WMS&version=1.3.0&request=GetCapabilities&layer=${layer}`, { cache: "no-store" }).then((r) => r.text());
+  const m = /<Dimension name="time"[^>]*>\s*([^<\s]+)\s*</.exec(t); if (!m) throw new Error("no time range for " + layer);
+  const [a, b, step] = m[1].split("/"); return { start: Date.parse(a), end: Date.parse(b), step: /PT(\d+)M/.test(step) ? +/PT(\d+)M/.exec(step)[1] * 60000 : 600000 };
+}
+// Looks at the last hour of 10 minute lightning frames around a point and reports the nearest strike square.
+async function lightningScan(lat, lon, radiusKm = 100) {
+  const tr = await fetchTimeRange("Lightning_2.5km_Density"); const N = 6, px = 200, per = (radiusKm * 2) / px;
+  const R = 6378137, cosl = Math.cos((lat * Math.PI) / 180); const cx = (lon * Math.PI / 180) * R, cy = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * R, half = (radiusKm * 1000) / cosl;
+  const bbox = [cx - half, cy - half, cx + half, cy + half].map(Math.round).join(",");
+  let best = null, count = 0;
+  for (let k = 0; k < N; k++) {
+    const t = new Date(tr.end - k * tr.step).toISOString().slice(0, 19) + "Z";
+    const url = `${GEOMET_URL}?service=WMS&version=1.3.0&request=GetMap&layers=Lightning_2.5km_Density&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=${px}&height=${px}&bbox=${bbox}&time=${encodeURIComponent(t)}`;
+    const bmp = await createImageBitmap(await fetch(url).then((r) => r.blob())); const cv = new OffscreenCanvas(px, px), g = cv.getContext("2d"); g.drawImage(bmp, 0, 0);
+    const d = g.getImageData(0, 0, px, px).data; const ago = Math.max(0, Math.round((Date.now() - (tr.end - k * tr.step)) / 60000));
+    for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) {
+      if (d[(y * px + x) * 4 + 3] < 40) continue; count++;
+      const e = (x + 0.5 - px / 2) * per, n = (px / 2 - y - 0.5) * per, km = Math.hypot(e, n);
+      if (km <= radiusKm && (!best || km < best.km || (km === best.km && ago < best.ago))) best = { km, ago, bearing: ((Math.atan2(e, n) * 180) / Math.PI + 360) % 360 };
+    }
+  }
+  return { at: tr.end, radiusKm, count, nearestKm: best ? Math.round(best.km) : null, minutesAgo: best ? best.ago : null, bearing: best ? best.bearing : null };
+}
 
 "use strict";
 /* ================= core: config, state, time ================= */
@@ -413,7 +447,7 @@ const state = {
   screen: "map", venue: store.get("venue", "trent"), event: store.get("event", "hott-2026"),
   mode: store.get("mode", "plan"), unit: store.get("unit", "kmh"), night: store.get("night", false),
   limits: Object.assign({}, DEFAULT_LIMITS, store.get("limits", {})),
-  layers: Object.assign({ wind: true, waves: true, vis: true, radar: false, alerts: true, depth: true, marks: true, relief: true, course: true, landmarks: true }, store.get("layers", {})),
+  layers: Object.assign({ wind: true, waves: true, vis: true, radar: false, lightning: false, chs: false, alerts: true, depth: true, marks: true, relief: true, course: true, landmarks: true }, store.get("layers", {})),
   events: DEFAULT_EVENTS.concat(store.get("userEvents", [])),
   races: store.get("races", null), courses: store.get("courses", {}),
   hour: 0, playing: false, plan: null,
@@ -569,6 +603,7 @@ const shellSrc = (b) => "shell_" + (b === "8+" ? "8p" : b) + ".png";
 
 /* ================= map: sources, cartographic layers, interaction ================= */
 let map, mapReady = false, hazardPtsData = { type: "FeatureCollection", features: [] };
+const CHS_WMS = "https://egisp.dfo-mpo.gc.ca/arcgis/rest/services/chs/ENC_MaritimeChartService/MapServer/exts/MaritimeChartService/WMSServer";
 const EMPTY = { type: "FeatureCollection", features: [] };
 const SRC = ["water", "waterway", "landcover", "buildings", "roads", "rail", "structures", "power", "hazards", "seamarks", "seamark_areas", "landmarks", "places", "depth", "depth_contours"];
 
@@ -582,6 +617,7 @@ function initMap() {
     SRC.forEach((s) => map.addSource(s, { type: "geojson", data: EMPTY }));
     ["labels", "course", "courseTicks", "alerts", "windpts", "hazardPts"].forEach((s) => map.addSource(s, { type: "geojson", data: EMPTY }));
     const r = state.relief[state.venue];
+    map.addSource("chs", { type: "raster", tiles: [CHS_WMS + "?service=WMS&version=1.3.0&request=GetMap&layers=0,1,2,3,4,5,6,7,10,11&styles=&format=image/png&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}"], tileSize: 256, maxzoom: 17, attribution: "Chart: Canadian Hydrographic Service, not for navigation" });
     map.addSource("relief", { type: "image", url: "relief_" + state.venue + ".png", coordinates: r.relief });
     mapReady = true;
     await loadVenueData();
@@ -686,6 +722,8 @@ function buildLayers() {
   L({ id: "bw-case", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(4, 17) } });
   L({ id: "bw", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwFill, "line-width": z(2, 11) } });
   L({ id: "bw-rubble", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], minzoom: 12.5, layout: { "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(0.8, 3), "line-dasharray": [1.4, 1.8], "line-opacity": 0.8 } });
+  // Official Canadian Hydrographic Service chart: covers our own base cartography when on; marks, hazards, wind and the rest stay on top.
+  L({ id: "chs", type: "raster", source: "chs", layout: { visibility: state.layers.chs ? "visible" : "none" }, paint: { "raster-fade-duration": 0 } });
   L({ id: "power", type: "line", source: "power", minzoom: 12, paint: { "line-color": P.power, "line-width": 1, "line-dasharray": [6, 3] } });
   // hazards: dams/weirs in danger magenta with a hatched band, lock gates as heavy bars
   L({ id: "dam-band", type: "line", source: "hazards", filter: ["in", ["get", "kind"], ["literal", ["dam", "weir"]]], paint: { "line-color": P.hazard, "line-width": z(3, 9), "line-opacity": 0.35 } });
@@ -696,7 +734,7 @@ function buildLayers() {
     paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", 0.3, "orange", 0.22, 0.09] } });
   L({ id: "alerts-line", type: "line", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
     paint: { "line-color": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "#D0302A", "orange", "#E07B00", "#C9A400"], "line-width": 2, "line-opacity": 0.8 } });
-  radarBuild();
+  radarBuild(); ltgBuild();
   // course
   L({ id: "course-case", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": "#FFFFFF", "line-width": 7, "line-opacity": dim() ? 0.25 : 0.9 } });
   L({ id: "course", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": state.night ? "#D0503F" : cssv("--accent") || "#0B6E82", "line-width": 3.5 } });
@@ -729,7 +767,7 @@ function setLayerVis() {
   ["depth-fill", "depth-line", "lbl-depth"].forEach((id) => set(id, state.layers.depth));
   ["marks", "sm-areas"].forEach((id) => set(id, state.layers.marks));
   ["alerts-fill", "alerts-line"].forEach((id) => set(id, state.layers.alerts));
-  radarToggle(); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
+  radarToggle(); ltgToggle(); if (map.getLayer("chs")) map.setLayoutProperty("chs", "visibility", state.layers.chs ? "visible" : "none"); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
   ["course", "course-case", "course-ticks"].forEach((id) => set(id, state.layers.course));
   if (map.getLayer("relief")) map.setPaintProperty("relief", "raster-opacity", state.layers.relief ? pal().relief : 0);
   overlay.resetTrails(); overlay.dirty = true; renderLegendMini(); renderQuickChips(); save();
@@ -971,6 +1009,8 @@ const LAYER_DEFS = [
   ["waves", "Waves", (g) => { const gr = g.createLinearGradient(0, 0, 44, 0); gr.addColorStop(0, "rgba(40,140,190,.5)"); gr.addColorStop(.6, "rgba(230,160,30,.8)"); gr.addColorStop(1, "rgba(200,50,90,.85)"); g.fillStyle = gr; g.fillRect(0, 0, 44, 30); }],
   ["vis", "Fog", (g) => { g.fillStyle = "#9cc"; g.fillRect(0, 0, 44, 30); const gr = g.createLinearGradient(0, 0, 0, 30); gr.addColorStop(0, "rgba(255,255,255,.95)"); gr.addColorStop(1, "rgba(255,255,255,.2)"); g.fillStyle = gr; g.fillRect(0, 0, 44, 30); }],
   ["radar", "Radar", (g) => { g.fillStyle = "#e9eef0"; g.fillRect(0, 0, 44, 30); [["#4caf50", 18, 16, 12], ["#ffeb3b", 20, 15, 7], ["#f44336", 21, 15, 3]].forEach(([c, x, y, r]) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }); }],
+  ["lightning", "Lightning", (g) => { g.fillStyle = "#e9eef0"; g.fillRect(0, 0, 44, 30); g.fillStyle = "#1a6bd1"; g.fillRect(8, 20, 5, 5); g.fillStyle = "#18b030"; g.fillRect(16, 16, 5, 5); g.fillStyle = "#ffe800"; g.fillRect(24, 10, 5, 5); g.fillStyle = "#ff2a00"; g.fillRect(31, 5, 5, 5); }],
+  ["chs", "Official chart", (g) => { g.fillStyle = "#A9D0F5"; g.fillRect(0, 0, 44, 30); g.fillStyle = "#AF9B57"; g.fillRect(0, 0, 18, 30); g.strokeStyle = "#51606b"; g.lineWidth = 1; g.beginPath(); g.moveTo(18, 0); g.lineTo(18, 30); g.stroke(); g.fillStyle = "#33424a"; g.font = "9px sans-serif"; g.fillText("7", 26, 12); g.fillText("12", 32, 24); }],
   ["alerts", "Alerts", (g) => { g.strokeStyle = "#C9A400"; g.lineWidth = 2.2; for (let i = -30; i < 50; i += 6) { g.beginPath(); g.moveTo(i, 30); g.lineTo(i + 30, 0); g.stroke(); } }],
   ["depth", "Depth", (g) => { ["#79B6E2", "#B5D9F1", "#E8F3FB"].forEach((c, i) => { g.fillStyle = c; g.fillRect(i * 15, 0, 15, 30); }); g.strokeStyle = "#0D3E66"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(15, 0); g.lineTo(15, 30); g.stroke(); }],
   ["marks", "Nav marks", (g) => { g.save(); g.translate(4, 4); MARK.stbd(g, 20, 22); g.restore(); g.save(); g.translate(20, 4); MARK.port(g, 20, 22); g.restore(); }],
@@ -979,7 +1019,7 @@ const LAYER_DEFS = [
   ["landmarks", "Landmarks", (g) => { g.save(); g.translate(15, 4); MARK.tower(g, 14, 22); g.restore(); }]
 ];
 function renderQuickChips() {
-  const items = [["wind", "Wind", "#0B6E82"], ["vis", "Fog", "#9aa"], ["waves", "Waves", "#E6A01E"], ["radar", "Radar", "#4caf50"], ["alerts", "Alerts", "#C9A400"], ["depth", "Depth", "#4F86B3"]]
+  const items = [["wind", "Wind", "#0B6E82"], ["vis", "Fog", "#9aa"], ["waves", "Waves", "#E6A01E"], ["radar", "Radar", "#4caf50"], ["lightning", "Lightning", "#E6C200"], ["chs", "Official chart", "#4F86B3"], ["alerts", "Alerts", "#C9A400"], ["depth", "Depth", "#4F86B3"]]
     .filter(([k]) => k !== "waves" || state.wx[state.venue].waves).filter(([k]) => k !== "depth" || V().depth);
   $("quickChips").innerHTML = items.map(([k, l, c]) => `<button class="chip" data-k="${k}" aria-pressed="${state.layers[k]}"><i style="background:${c}"></i>${l}</button>`).join("");
   $("quickChips").querySelectorAll(".chip").forEach((b) => b.onclick = () => { state.layers[b.dataset.k] = !state.layers[b.dataset.k]; setLayerVis(); });
@@ -988,6 +1028,7 @@ function renderLegendMini() {
   const L = state.limits; const parts = [];
   if (state.layers.wind) { const mx = L.windS * 1.4, c = Math.round(L.windC / mx * 100), s2 = Math.round(L.windS / mx * 100);
     parts.push(`<div><b>Wind</b> <span class="muted">${uLbl()}</span></div><div style="display:flex;gap:6px;align-items:center"><span class="ramp" style="width:90px;background:linear-gradient(90deg,${dim() ? "#9cc" : "#0B5A6E"} 0 ${c}%,#C87800 ${c}% ${s2}%,#C8282A ${s2}%)"></span><span class="mono" style="font-size:.66rem">${spd(L.windC)} · ${spd(L.windS)}</span></div><div class="muted" style="font-size:.66rem;line-height:1.25">Lines turn amber at your caution limit, red at your stop limit.</div>`); }
+  if (state.layers.lightning) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Lightning</b><span class="ramp" style="width:90px;background:linear-gradient(90deg,#1a3fd6,#00b4ff,#18c030,#ffe800,#ff8a00,#ff2a00)"></span><span class="mono" style="font-size:.66rem">last hour</span></div><div class="muted" style="font-size:.66rem;line-height:1.25">Each square is 2.5 km. Fainter squares are older.</div>`);
   if (state.layers.radar) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Rain</b><span class="ramp" style="width:90px;background:linear-gradient(90deg,#4aa8ff,#00d4c8 18%,#18b030 36%,#0a7a1a 55%,#ffe800 66%,#ff9a00 76%,#ff2a00 86%,#c800b4 94%,#5a1e96)"></span><span class="mono" style="font-size:.66rem">0.1 → 50+ mm/h</span></div>`);
   if (state.layers.waves && state.wx[state.venue].waves) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Waves</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,rgba(40,140,190,.4),rgba(230,160,30,.8) 60%,rgba(200,50,90,.9))"></span><span class="mono" style="font-size:.66rem">${L.waveS} m</span></div>`);
   if (state.layers.depth && V().depth) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Depth</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,${pal().depth.join(",")})"></span><span class="mono" style="font-size:.66rem">0→50 m</span></div>`);
@@ -1014,7 +1055,7 @@ function defaultWindow() {
 function sunTimes(dateStr) { const v = V(); return SunCalc.getTimes(localToDate(dateStr.slice(0, 10) + "T12:00"), v.center[1], v.center[0]); }
 function computeCall(win) {
   const v = fcVenue(); if (!v || !v.hourly) return null;
-  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes });
+  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes, lightning: state.lightning && state.lightning[state.venue] });
 }
 function gauge(val, c, s, max, lab) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>${lab ? `<div class="lim">${lab}</div>` : ""}`; }
 function renderCall() {
@@ -1037,6 +1078,7 @@ function renderCall() {
     const f = c.f;
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
+    ${lightningCardHtml()}
     ${shareRow()}
     ${watchRow(win)}
     <div class="factors">
@@ -1226,6 +1268,8 @@ function openLegend() {
       ["Waves, low to over limit", (g) => { const gr = g.createLinearGradient(0, 0, 34, 0); gr.addColorStop(0, "rgba(40,140,190,.5)"); gr.addColorStop(.6, "rgba(230,160,30,.8)"); gr.addColorStop(1, "rgba(200,50,90,.85)"); g.fillStyle = gr; g.fillRect(0, 2, 34, 20); }],
       ["Fog veil (thicker = lower visibility)", (g) => { g.fillStyle = P.water; g.fillRect(0, 2, 34, 20); g.fillStyle = "rgba(255,255,255,.75)"; g.fillRect(0, 2, 34, 20); }],
       ["Rain radar, light to heavy", (g) => { const gr = g.createLinearGradient(0, 0, 34, 0); ["#4aa8ff", "#00d4c8", "#18b030", "#ffe800", "#ff9a00", "#ff2a00", "#c800b4"].forEach((c, i, a) => gr.addColorStop(i / (a.length - 1), c)); g.fillStyle = gr; g.fillRect(0, 6, 34, 12); }],
+      ["Lightning strike square, last hour", (g) => { [["#1a6bd1", 6, 14], ["#18b030", 14, 10], ["#ffe800", 22, 6], ["#ff2a00", 28, 12]].forEach(([c, x, y]) => { g.fillStyle = c; g.fillRect(x, y, 5, 5); }); }],
+      ["Official chart (CHS): depths in metres, soundings, marks", (g) => { g.fillStyle = "#A9D0F5"; g.fillRect(0, 2, 34, 20); g.fillStyle = "#AF9B57"; g.fillRect(0, 2, 12, 20); g.fillStyle = "#33424a"; g.font = "9px sans-serif"; g.fillText("7", 18, 14); }],
       ["Weather alert area", (g) => { g.strokeStyle = "#C9A400"; g.lineWidth = 2; for (let i = -24; i < 40; i += 6) { g.beginPath(); g.moveTo(i, 24); g.lineTo(i + 24, 0); g.stroke(); } }]]],
     ["Rowing", [
       ["Your course, ticks every 250 m", (g) => { g.strokeStyle = "#fff"; g.lineWidth = 6; g.beginPath(); g.moveTo(2, 12); g.lineTo(32, 12); g.stroke(); g.strokeStyle = cssv("--accent"); g.lineWidth = 3; g.stroke(); g.fillStyle = "#fff"; g.lineWidth = 1.5; [8, 26].forEach((x) => { g.beginPath(); g.arc(x, 12, 3, 0, 7); g.fill(); g.stroke(); }); }],
@@ -1528,6 +1572,58 @@ async function fillWater() {
     <p class="small muted">${esc(w.src)} · reading ${ageMin < 90 ? ageMin + " min" : Math.round(ageMin / 60) + " h"} old${d.stale ? " (saved copy, offline)" : ""}</p>`;
 }
 
+
+/* ---------- lightning layer: the last hour of strikes, fainter as they age ---------- */
+const ltg = { frames: [], status: "idle", fetchedAt: 0 };
+const LTG_OPACITY = [0.28, 0.38, 0.5, 0.65, 0.8, 0.95]; // oldest to newest
+const ltgTiles = (t) => `${GEOMET}?service=WMS&version=1.3.0&request=GetMap&layers=Lightning_2.5km_Density&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}&time=${encodeURIComponent(t)}`;
+async function ltgLoad() {
+  if (!mapReady) return;
+  try {
+    const tr = await fetchTimeRange("Lightning_2.5km_Density"); const fr = [];
+    for (let k = 5; k >= 0; k--) fr.push(new Date(tr.end - k * tr.step).toISOString().slice(0, 19) + "Z");
+    ltgDrop(); ltg.frames = fr; ltg.fetchedAt = Date.now(); ltg.status = "ok"; buildLayers();
+  } catch (e) { console.warn("lightning layer", e); ltg.status = "fail"; toast("Lightning layer needs a connection"); }
+}
+function ltgDrop() { ltg.frames.forEach((_, i) => { if (map.getLayer("ltg" + i)) map.removeLayer("ltg" + i); if (map.getSource("ltg" + i)) map.removeSource("ltg" + i); }); ltg.frames = []; }
+function ltgBuild() {
+  ltg.frames.forEach((t, i) => {
+    if (!map.getSource("ltg" + i)) map.addSource("ltg" + i, { type: "raster", tiles: [ltgTiles(t)], tileSize: 256, maxzoom: 9, attribution: "Lightning: Canadian Lightning Detection Network via ECCC" });
+    L({ id: "ltg" + i, type: "raster", source: "ltg" + i, layout: { visibility: state.layers.lightning ? "visible" : "none" }, paint: { "raster-opacity": LTG_OPACITY[i], "raster-fade-duration": 0, "raster-resampling": "nearest" } });
+  });
+}
+async function ltgToggle() {
+  if (!state.layers.lightning) { ltg.frames.forEach((_, i) => map.getLayer("ltg" + i) && map.setLayoutProperty("ltg" + i, "visibility", "none")); return; }
+  if (!ltg.frames.length || Date.now() - ltg.fetchedAt > 5 * 60000) await ltgLoad();
+  else ltg.frames.forEach((_, i) => map.getLayer("ltg" + i) && map.setLayoutProperty("ltg" + i, "visibility", "visible"));
+}
+setInterval(() => { if (state.layers.lightning && !document.hidden && Date.now() - ltg.fetchedAt > 5 * 60000) ltgLoad(); }, 60000);
+
+/* ---------- lightning near the venue: the number that matters ---------- */
+state.lightning = {};
+async function refreshLightning() {
+  const v = V(), fv = fcVenue(); if (!fv) return; const id = state.venue;
+  try { state.lightning[id] = await lightningScan(fv.lat, fv.lon, 100); }
+  catch (e) { console.warn("lightning scan", e); state.lightning[id] = { error: true, at: Date.now() }; }
+  if (state.screen === "call") renderCall();
+  renderContext(); if (typeof checkWatches === "function") checkWatches();
+}
+function lightningCardHtml() {
+  const s = state.lightning[state.venue]; let main, cls = "", note = "";
+  if (!s) main = `<span class="muted">Checking the lightning network…</span>`;
+  else if (s.error) main = `<span class="muted">Could not check lightning. It needs a connection.</span>`;
+  else {
+    const hm2 = new Date(s.at).toLocaleTimeString("en-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
+    note = `Canadian Lightning Detection Network via Environment Canada, data to ${hm2}. Strikes appear about 10 minutes late. Thunder can be heard before lightning is detected.`;
+    if (s.nearestKm == null) main = `<b>None detected</b> within ${s.radiusKm} km in the last hour.`;
+    else { cls = s.nearestKm <= 30 && s.minutesAgo <= 30 ? "stop" : s.nearestKm <= 60 ? "caution" : ""; main = `<b>Nearest strike ${s.nearestKm} km ${compass(s.bearing)}, ${s.minutesAgo} min ago.</b> <span class="muted">${s.count} strike squares within ${s.radiusKm} km in the last hour.</span>`; }
+  }
+  return `<div class="card ltg ${cls}"><div class="top"><span>Lightning</span><span class="bolt">⚡</span></div><div class="ltgmain">${main}</div>${note ? `<div class="note">${esc(note)}</div>` : ""}</div>`;
+}
+setInterval(() => { if (!document.hidden) refreshLightning(); }, 5 * 60000);
+booted.then(() => setTimeout(refreshLightning, 1500));
+document.addEventListener("visibilitychange", () => { const s = state.lightning[state.venue]; if (!document.hidden && (!s || Date.now() - (s.at || 0) > 4 * 60000)) refreshLightning(); });
+
 /* ================= live forecast: replaces the build-time snapshot as soon as the phone has a connection ================= */
 // The snapshot in wx.json and fc.json is only a fallback for the first paint and for offline use.
 // This file refreshes the wind grid, waves, point forecast and alerts from Open-Meteo and Environment Canada.
@@ -1728,7 +1824,7 @@ function watchTargets() {
 function waterTempFor(vid) { const v = VENUES[vid]; if (v.water != null) return v.water; const fv = state.fc.venues[v.fc]; const o = fv && fv.buoy && fv.buoy.obs && fv.buoy.obs.find((x) => x.wtmp != null); return o ? o.wtmp : 15; }
 function computeFor(t) {
   const v = VENUES[t.venue], fv = state.fc && state.fc.venues && state.fc.venues[v.fc]; if (!fv || !fv.hourly) return null;
-  return callCore({ hourly: fv.hourly, waves: fv.waves, win: { start: t.start, dur: t.dur }, limits: state.limits, waterTemp: waterTempFor(t.venue),
+  return callCore({ hourly: fv.hourly, waves: fv.waves, win: { start: t.start, dur: t.dur }, limits: state.limits, waterTemp: waterTempFor(t.venue), lightning: state.lightning && state.lightning[t.venue],
     sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), v.center[1], v.center[0]) });
 }
 

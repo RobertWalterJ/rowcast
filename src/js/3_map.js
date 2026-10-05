@@ -1,5 +1,6 @@
 /* ================= map: sources, cartographic layers, interaction ================= */
 let map, mapReady = false, hazardPtsData = { type: "FeatureCollection", features: [] };
+const CHS_WMS = "https://egisp.dfo-mpo.gc.ca/arcgis/rest/services/chs/ENC_MaritimeChartService/MapServer/exts/MaritimeChartService/WMSServer";
 const EMPTY = { type: "FeatureCollection", features: [] };
 const SRC = ["water", "waterway", "landcover", "buildings", "roads", "rail", "structures", "power", "hazards", "seamarks", "seamark_areas", "landmarks", "places", "depth", "depth_contours"];
 
@@ -13,6 +14,7 @@ function initMap() {
     SRC.forEach((s) => map.addSource(s, { type: "geojson", data: EMPTY }));
     ["labels", "course", "courseTicks", "alerts", "windpts", "hazardPts"].forEach((s) => map.addSource(s, { type: "geojson", data: EMPTY }));
     const r = state.relief[state.venue];
+    map.addSource("chs", { type: "raster", tiles: [CHS_WMS + "?service=WMS&version=1.3.0&request=GetMap&layers=0,1,2,3,4,5,6,7,10,11&styles=&format=image/png&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}"], tileSize: 256, maxzoom: 17, attribution: "Chart: Canadian Hydrographic Service, not for navigation" });
     map.addSource("relief", { type: "image", url: "relief_" + state.venue + ".png", coordinates: r.relief });
     mapReady = true;
     await loadVenueData();
@@ -117,6 +119,8 @@ function buildLayers() {
   L({ id: "bw-case", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(4, 17) } });
   L({ id: "bw", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwFill, "line-width": z(2, 11) } });
   L({ id: "bw-rubble", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], minzoom: 12.5, layout: { "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(0.8, 3), "line-dasharray": [1.4, 1.8], "line-opacity": 0.8 } });
+  // Official Canadian Hydrographic Service chart: covers our own base cartography when on; marks, hazards, wind and the rest stay on top.
+  L({ id: "chs", type: "raster", source: "chs", layout: { visibility: state.layers.chs ? "visible" : "none" }, paint: { "raster-fade-duration": 0 } });
   L({ id: "power", type: "line", source: "power", minzoom: 12, paint: { "line-color": P.power, "line-width": 1, "line-dasharray": [6, 3] } });
   // hazards: dams/weirs in danger magenta with a hatched band, lock gates as heavy bars
   L({ id: "dam-band", type: "line", source: "hazards", filter: ["in", ["get", "kind"], ["literal", ["dam", "weir"]]], paint: { "line-color": P.hazard, "line-width": z(3, 9), "line-opacity": 0.35 } });
@@ -127,7 +131,7 @@ function buildLayers() {
     paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", 0.3, "orange", 0.22, 0.09] } });
   L({ id: "alerts-line", type: "line", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
     paint: { "line-color": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "#D0302A", "orange", "#E07B00", "#C9A400"], "line-width": 2, "line-opacity": 0.8 } });
-  radarBuild();
+  radarBuild(); ltgBuild();
   // course
   L({ id: "course-case", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": "#FFFFFF", "line-width": 7, "line-opacity": dim() ? 0.25 : 0.9 } });
   L({ id: "course", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": state.night ? "#D0503F" : cssv("--accent") || "#0B6E82", "line-width": 3.5 } });
@@ -160,7 +164,7 @@ function setLayerVis() {
   ["depth-fill", "depth-line", "lbl-depth"].forEach((id) => set(id, state.layers.depth));
   ["marks", "sm-areas"].forEach((id) => set(id, state.layers.marks));
   ["alerts-fill", "alerts-line"].forEach((id) => set(id, state.layers.alerts));
-  radarToggle(); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
+  radarToggle(); ltgToggle(); if (map.getLayer("chs")) map.setLayoutProperty("chs", "visibility", state.layers.chs ? "visible" : "none"); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
   ["course", "course-case", "course-ticks"].forEach((id) => set(id, state.layers.course));
   if (map.getLayer("relief")) map.setPaintProperty("relief", "raster-opacity", state.layers.relief ? pal().relief : 0);
   overlay.resetTrails(); overlay.dirty = true; renderLegendMini(); renderQuickChips(); save();

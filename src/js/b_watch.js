@@ -22,7 +22,7 @@ function watchTargets() {
 function waterTempFor(vid) { const v = VENUES[vid]; if (v.water != null) return v.water; const fv = state.fc.venues[v.fc]; const o = fv && fv.buoy && fv.buoy.obs && fv.buoy.obs.find((x) => x.wtmp != null); return o ? o.wtmp : 15; }
 function computeFor(t) {
   const v = VENUES[t.venue], fv = state.fc && state.fc.venues && state.fc.venues[v.fc]; if (!fv || !fv.hourly) return null;
-  return callCore({ hourly: fv.hourly, waves: fv.waves, win: { start: t.start, dur: t.dur }, limits: state.limits, waterTemp: waterTempFor(t.venue),
+  return callCore({ hourly: fv.hourly, waves: fv.waves, win: { start: t.start, dur: t.dur }, limits: state.limits, waterTemp: waterTempFor(t.venue), lightning: state.lightning && state.lightning[t.venue],
     sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), v.center[1], v.center[0]) });
 }
 

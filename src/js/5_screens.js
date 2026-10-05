@@ -20,6 +20,8 @@ const LAYER_DEFS = [
   ["waves", "Waves", (g) => { const gr = g.createLinearGradient(0, 0, 44, 0); gr.addColorStop(0, "rgba(40,140,190,.5)"); gr.addColorStop(.6, "rgba(230,160,30,.8)"); gr.addColorStop(1, "rgba(200,50,90,.85)"); g.fillStyle = gr; g.fillRect(0, 0, 44, 30); }],
   ["vis", "Fog", (g) => { g.fillStyle = "#9cc"; g.fillRect(0, 0, 44, 30); const gr = g.createLinearGradient(0, 0, 0, 30); gr.addColorStop(0, "rgba(255,255,255,.95)"); gr.addColorStop(1, "rgba(255,255,255,.2)"); g.fillStyle = gr; g.fillRect(0, 0, 44, 30); }],
   ["radar", "Radar", (g) => { g.fillStyle = "#e9eef0"; g.fillRect(0, 0, 44, 30); [["#4caf50", 18, 16, 12], ["#ffeb3b", 20, 15, 7], ["#f44336", 21, 15, 3]].forEach(([c, x, y, r]) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }); }],
+  ["lightning", "Lightning", (g) => { g.fillStyle = "#e9eef0"; g.fillRect(0, 0, 44, 30); g.fillStyle = "#1a6bd1"; g.fillRect(8, 20, 5, 5); g.fillStyle = "#18b030"; g.fillRect(16, 16, 5, 5); g.fillStyle = "#ffe800"; g.fillRect(24, 10, 5, 5); g.fillStyle = "#ff2a00"; g.fillRect(31, 5, 5, 5); }],
+  ["chs", "Official chart", (g) => { g.fillStyle = "#A9D0F5"; g.fillRect(0, 0, 44, 30); g.fillStyle = "#AF9B57"; g.fillRect(0, 0, 18, 30); g.strokeStyle = "#51606b"; g.lineWidth = 1; g.beginPath(); g.moveTo(18, 0); g.lineTo(18, 30); g.stroke(); g.fillStyle = "#33424a"; g.font = "9px sans-serif"; g.fillText("7", 26, 12); g.fillText("12", 32, 24); }],
   ["alerts", "Alerts", (g) => { g.strokeStyle = "#C9A400"; g.lineWidth = 2.2; for (let i = -30; i < 50; i += 6) { g.beginPath(); g.moveTo(i, 30); g.lineTo(i + 30, 0); g.stroke(); } }],
   ["depth", "Depth", (g) => { ["#79B6E2", "#B5D9F1", "#E8F3FB"].forEach((c, i) => { g.fillStyle = c; g.fillRect(i * 15, 0, 15, 30); }); g.strokeStyle = "#0D3E66"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(15, 0); g.lineTo(15, 30); g.stroke(); }],
   ["marks", "Nav marks", (g) => { g.save(); g.translate(4, 4); MARK.stbd(g, 20, 22); g.restore(); g.save(); g.translate(20, 4); MARK.port(g, 20, 22); g.restore(); }],
@@ -28,7 +30,7 @@ const LAYER_DEFS = [
   ["landmarks", "Landmarks", (g) => { g.save(); g.translate(15, 4); MARK.tower(g, 14, 22); g.restore(); }]
 ];
 function renderQuickChips() {
-  const items = [["wind", "Wind", "#0B6E82"], ["vis", "Fog", "#9aa"], ["waves", "Waves", "#E6A01E"], ["radar", "Radar", "#4caf50"], ["alerts", "Alerts", "#C9A400"], ["depth", "Depth", "#4F86B3"]]
+  const items = [["wind", "Wind", "#0B6E82"], ["vis", "Fog", "#9aa"], ["waves", "Waves", "#E6A01E"], ["radar", "Radar", "#4caf50"], ["lightning", "Lightning", "#E6C200"], ["chs", "Official chart", "#4F86B3"], ["alerts", "Alerts", "#C9A400"], ["depth", "Depth", "#4F86B3"]]
     .filter(([k]) => k !== "waves" || state.wx[state.venue].waves).filter(([k]) => k !== "depth" || V().depth);
   $("quickChips").innerHTML = items.map(([k, l, c]) => `<button class="chip" data-k="${k}" aria-pressed="${state.layers[k]}"><i style="background:${c}"></i>${l}</button>`).join("");
   $("quickChips").querySelectorAll(".chip").forEach((b) => b.onclick = () => { state.layers[b.dataset.k] = !state.layers[b.dataset.k]; setLayerVis(); });
@@ -37,6 +39,7 @@ function renderLegendMini() {
   const L = state.limits; const parts = [];
   if (state.layers.wind) { const mx = L.windS * 1.4, c = Math.round(L.windC / mx * 100), s2 = Math.round(L.windS / mx * 100);
     parts.push(`<div><b>Wind</b> <span class="muted">${uLbl()}</span></div><div style="display:flex;gap:6px;align-items:center"><span class="ramp" style="width:90px;background:linear-gradient(90deg,${dim() ? "#9cc" : "#0B5A6E"} 0 ${c}%,#C87800 ${c}% ${s2}%,#C8282A ${s2}%)"></span><span class="mono" style="font-size:.66rem">${spd(L.windC)} · ${spd(L.windS)}</span></div><div class="muted" style="font-size:.66rem;line-height:1.25">Lines turn amber at your caution limit, red at your stop limit.</div>`); }
+  if (state.layers.lightning) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Lightning</b><span class="ramp" style="width:90px;background:linear-gradient(90deg,#1a3fd6,#00b4ff,#18c030,#ffe800,#ff8a00,#ff2a00)"></span><span class="mono" style="font-size:.66rem">last hour</span></div><div class="muted" style="font-size:.66rem;line-height:1.25">Each square is 2.5 km. Fainter squares are older.</div>`);
   if (state.layers.radar) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Rain</b><span class="ramp" style="width:90px;background:linear-gradient(90deg,#4aa8ff,#00d4c8 18%,#18b030 36%,#0a7a1a 55%,#ffe800 66%,#ff9a00 76%,#ff2a00 86%,#c800b4 94%,#5a1e96)"></span><span class="mono" style="font-size:.66rem">0.1 → 50+ mm/h</span></div>`);
   if (state.layers.waves && state.wx[state.venue].waves) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Waves</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,rgba(40,140,190,.4),rgba(230,160,30,.8) 60%,rgba(200,50,90,.9))"></span><span class="mono" style="font-size:.66rem">${L.waveS} m</span></div>`);
   if (state.layers.depth && V().depth) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Depth</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,${pal().depth.join(",")})"></span><span class="mono" style="font-size:.66rem">0→50 m</span></div>`);
@@ -63,7 +66,7 @@ function defaultWindow() {
 function sunTimes(dateStr) { const v = V(); return SunCalc.getTimes(localToDate(dateStr.slice(0, 10) + "T12:00"), v.center[1], v.center[0]); }
 function computeCall(win) {
   const v = fcVenue(); if (!v || !v.hourly) return null;
-  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes });
+  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes, lightning: state.lightning && state.lightning[state.venue] });
 }
 function gauge(val, c, s, max, lab) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>${lab ? `<div class="lim">${lab}</div>` : ""}`; }
 function renderCall() {
@@ -86,6 +89,7 @@ function renderCall() {
     const f = c.f;
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
+    ${lightningCardHtml()}
     ${shareRow()}
     ${watchRow(win)}
     <div class="factors">

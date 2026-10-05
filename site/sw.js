@@ -1,7 +1,7 @@
 /* RowCast service worker. VERSION and PRECACHE are filled in by scripts/build_site.py. */
 self.window = self; // suncalc.js expects a browser global
 importScripts("callcore.js", "suncalc.js"); // the same go / caution / stay ashore rules the page uses
-const VERSION = "9b2e378ba5";
+const VERSION = "d8d700604a";
 const PRECACHE = ["./", "apple-touch-icon.png", "callcore.js", "fc.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "index.html", "map_argo.json", "map_trent.json", "maplibre-gl.js", "relief.json", "relief_argo.png", "relief_trent.png", "shell_1x.png", "shell_2x.png", "shell_4x.png", "shell_8p.png", "suncalc.js", "wx.json"];
 const FONTS = "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap";
 const SHELL = "rowcast-shell-" + VERSION, RUNTIME = "rowcast-runtime";
@@ -31,6 +31,9 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(caches.open(SHELL).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).catch(() => req.mode === "navigate" ? c.match("index.html") : Response.error()))));
   } else if (url.hostname === "geo.weather.gc.ca" && /request=GetMap/i.test(url.search)) {
     return; // radar tiles: straight to the network, never stored (every frame is a new URL)
+  } else if (url.hostname === "egisp.dfo-mpo.gc.ca") {
+    // Official chart tiles do not change often: keep the ones you have viewed so the chart works on the water without signal.
+    e.respondWith(caches.open("rowcast-chart").then((c) => c.match(req).then((hit) => hit || fetch(req).then((r) => { if (r.ok) { c.put(req, r.clone()); c.keys().then((ks) => { if (ks.length > 900) ks.slice(0, ks.length - 900).forEach((k) => c.delete(k)); }); } return r; }))));
   } else if (LIVE.test(url.hostname)) {
     // Live weather: network first, last good answer when offline.
     e.respondWith(caches.open(RUNTIME).then((c) => fetch(req).then((r) => put(c, req, r)).catch(() => c.match(req).then((h) => h || Response.error()))));
@@ -52,9 +55,10 @@ async function swCheckWatches() {
   const byVenue = {}; watches.filter((w) => addMin(w.start, w.dur) > now).forEach((w) => (byVenue[w.venue] = byVenue[w.venue] || []).push(w));
   for (const vid of Object.keys(byVenue)) {
     const ven = set.venues[vid]; if (!ven) continue;
+    let lightning = null; try { lightning = await lightningScan(ven.lat, ven.lon, 100); } catch (err) { /* no lightning data: the forecast rules still run */ }
     let pt, marine = null; try { pt = await fetchPoint(ven); if (ven.marine) marine = await fetchMarine(ven.marine[0], ven.marine[1]); } catch (err) { continue; }
     for (const w of byVenue[vid]) {
-      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water,
+      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water, lightning,
         sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), ven.center[1], ven.center[0]) });
       if (!c) continue; const sum = watchSummary(c);
       if (!w.base) { w.base = sum; continue; }

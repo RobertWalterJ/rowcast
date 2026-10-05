@@ -113,3 +113,55 @@ async function fillWater() {
     <p class="small muted" style="margin-top:8px">${esc(w.name)}. ${esc(note)}${esc(fcTxt)}</p>
     <p class="small muted">${esc(w.src)} · reading ${ageMin < 90 ? ageMin + " min" : Math.round(ageMin / 60) + " h"} old${d.stale ? " (saved copy, offline)" : ""}</p>`;
 }
+
+
+/* ---------- lightning layer: the last hour of strikes, fainter as they age ---------- */
+const ltg = { frames: [], status: "idle", fetchedAt: 0 };
+const LTG_OPACITY = [0.28, 0.38, 0.5, 0.65, 0.8, 0.95]; // oldest to newest
+const ltgTiles = (t) => `${GEOMET}?service=WMS&version=1.3.0&request=GetMap&layers=Lightning_2.5km_Density&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}&time=${encodeURIComponent(t)}`;
+async function ltgLoad() {
+  if (!mapReady) return;
+  try {
+    const tr = await fetchTimeRange("Lightning_2.5km_Density"); const fr = [];
+    for (let k = 5; k >= 0; k--) fr.push(new Date(tr.end - k * tr.step).toISOString().slice(0, 19) + "Z");
+    ltgDrop(); ltg.frames = fr; ltg.fetchedAt = Date.now(); ltg.status = "ok"; buildLayers();
+  } catch (e) { console.warn("lightning layer", e); ltg.status = "fail"; toast("Lightning layer needs a connection"); }
+}
+function ltgDrop() { ltg.frames.forEach((_, i) => { if (map.getLayer("ltg" + i)) map.removeLayer("ltg" + i); if (map.getSource("ltg" + i)) map.removeSource("ltg" + i); }); ltg.frames = []; }
+function ltgBuild() {
+  ltg.frames.forEach((t, i) => {
+    if (!map.getSource("ltg" + i)) map.addSource("ltg" + i, { type: "raster", tiles: [ltgTiles(t)], tileSize: 256, maxzoom: 9, attribution: "Lightning: Canadian Lightning Detection Network via ECCC" });
+    L({ id: "ltg" + i, type: "raster", source: "ltg" + i, layout: { visibility: state.layers.lightning ? "visible" : "none" }, paint: { "raster-opacity": LTG_OPACITY[i], "raster-fade-duration": 0, "raster-resampling": "nearest" } });
+  });
+}
+async function ltgToggle() {
+  if (!state.layers.lightning) { ltg.frames.forEach((_, i) => map.getLayer("ltg" + i) && map.setLayoutProperty("ltg" + i, "visibility", "none")); return; }
+  if (!ltg.frames.length || Date.now() - ltg.fetchedAt > 5 * 60000) await ltgLoad();
+  else ltg.frames.forEach((_, i) => map.getLayer("ltg" + i) && map.setLayoutProperty("ltg" + i, "visibility", "visible"));
+}
+setInterval(() => { if (state.layers.lightning && !document.hidden && Date.now() - ltg.fetchedAt > 5 * 60000) ltgLoad(); }, 60000);
+
+/* ---------- lightning near the venue: the number that matters ---------- */
+state.lightning = {};
+async function refreshLightning() {
+  const v = V(), fv = fcVenue(); if (!fv) return; const id = state.venue;
+  try { state.lightning[id] = await lightningScan(fv.lat, fv.lon, 100); }
+  catch (e) { console.warn("lightning scan", e); state.lightning[id] = { error: true, at: Date.now() }; }
+  if (state.screen === "call") renderCall();
+  renderContext(); if (typeof checkWatches === "function") checkWatches();
+}
+function lightningCardHtml() {
+  const s = state.lightning[state.venue]; let main, cls = "", note = "";
+  if (!s) main = `<span class="muted">Checking the lightning network…</span>`;
+  else if (s.error) main = `<span class="muted">Could not check lightning. It needs a connection.</span>`;
+  else {
+    const hm2 = new Date(s.at).toLocaleTimeString("en-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
+    note = `Canadian Lightning Detection Network via Environment Canada, data to ${hm2}. Strikes appear about 10 minutes late. Thunder can be heard before lightning is detected.`;
+    if (s.nearestKm == null) main = `<b>None detected</b> within ${s.radiusKm} km in the last hour.`;
+    else { cls = s.nearestKm <= 30 && s.minutesAgo <= 30 ? "stop" : s.nearestKm <= 60 ? "caution" : ""; main = `<b>Nearest strike ${s.nearestKm} km ${compass(s.bearing)}, ${s.minutesAgo} min ago.</b> <span class="muted">${s.count} strike squares within ${s.radiusKm} km in the last hour.</span>`; }
+  }
+  return `<div class="card ltg ${cls}"><div class="top"><span>Lightning</span><span class="bolt">⚡</span></div><div class="ltgmain">${main}</div>${note ? `<div class="note">${esc(note)}</div>` : ""}</div>`;
+}
+setInterval(() => { if (!document.hidden) refreshLightning(); }, 5 * 60000);
+booted.then(() => setTimeout(refreshLightning, 1500));
+document.addEventListener("visibilitychange", () => { const s = state.lightning[state.venue]; if (!document.hidden && (!s || Date.now() - (s.at || 0) > 4 * 60000)) refreshLightning(); });

@@ -31,6 +31,9 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(caches.open(SHELL).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).catch(() => req.mode === "navigate" ? c.match("index.html") : Response.error()))));
   } else if (url.hostname === "geo.weather.gc.ca" && /request=GetMap/i.test(url.search)) {
     return; // radar tiles: straight to the network, never stored (every frame is a new URL)
+  } else if (url.hostname === "egisp.dfo-mpo.gc.ca") {
+    // Official chart tiles do not change often: keep the ones you have viewed so the chart works on the water without signal.
+    e.respondWith(caches.open("rowcast-chart").then((c) => c.match(req).then((hit) => hit || fetch(req).then((r) => { if (r.ok) { c.put(req, r.clone()); c.keys().then((ks) => { if (ks.length > 900) ks.slice(0, ks.length - 900).forEach((k) => c.delete(k)); }); } return r; }))));
   } else if (LIVE.test(url.hostname)) {
     // Live weather: network first, last good answer when offline.
     e.respondWith(caches.open(RUNTIME).then((c) => fetch(req).then((r) => put(c, req, r)).catch(() => c.match(req).then((h) => h || Response.error()))));
@@ -52,9 +55,10 @@ async function swCheckWatches() {
   const byVenue = {}; watches.filter((w) => addMin(w.start, w.dur) > now).forEach((w) => (byVenue[w.venue] = byVenue[w.venue] || []).push(w));
   for (const vid of Object.keys(byVenue)) {
     const ven = set.venues[vid]; if (!ven) continue;
+    let lightning = null; try { lightning = await lightningScan(ven.lat, ven.lon, 100); } catch (err) { /* no lightning data: the forecast rules still run */ }
     let pt, marine = null; try { pt = await fetchPoint(ven); if (ven.marine) marine = await fetchMarine(ven.marine[0], ven.marine[1]); } catch (err) { continue; }
     for (const w of byVenue[vid]) {
-      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water,
+      const c = callCore({ hourly: pt.hourly, waves: marine, win: { start: w.start, dur: w.dur }, limits: set.limits, waterTemp: ven.water, lightning,
         sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), ven.center[1], ven.center[0]) });
       if (!c) continue; const sum = watchSummary(c);
       if (!w.base) { w.base = sum; continue; }

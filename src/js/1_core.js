@@ -23,7 +23,7 @@ const state = {
   screen: "map", venue: store.get("venue", "trent"), event: store.get("event", "hott-2026"),
   mode: store.get("mode", "plan"), unit: store.get("unit", "kmh"), night: store.get("night", false),
   limits: Object.assign({}, DEFAULT_LIMITS, store.get("limits", {})),
-  layers: Object.assign({ wind: true, waves: true, vis: true, radar: false, alerts: true, depth: true, marks: true, relief: true, course: true, landmarks: true }, store.get("layers", {})),
+  layers: Object.assign({ wind: true, waves: true, vis: true, radar: false, lightning: false, chs: false, alerts: true, depth: true, marks: true, relief: true, course: true, landmarks: true }, store.get("layers", {})),
   events: DEFAULT_EVENTS.concat(store.get("userEvents", [])),
   races: store.get("races", null), courses: store.get("courses", {}),
   hour: 0, playing: false, plan: null,

@@ -52,10 +52,13 @@ function callCore(o) {
   const f = {}; let worst = 0; const lvl = (x) => { worst = Math.max(worst, x); return ["go", "caution", "stop"][x]; };
   const wmax = mx("wind"), gmax = mx("gust"), di = ix[Math.floor(ix.length / 2)], dir = h.dir[di];
   f.wind = { v: wmax, g: gmax, dir, di, cls: lvl(wmax >= L.windS || gmax >= L.gustS ? 2 : wmax >= L.windC || gmax >= L.gustC ? 1 : 0) };
-  const thunder = ix2.some((i) => h.code[i] >= 95);
+  // Real strikes close by and recent (Canadian Lightning Detection Network) count as thunder when the row is soon.
+  const L1 = o.lightning, soon = localToDate(start).getTime() - Date.now() < 2 * 3600e3;
+  const lightning = L1 && L1.nearestKm != null && L1.nearestKm <= 30 && L1.minutesAgo <= 30 && soon ? { km: L1.nearestKm, min: L1.minutesAgo } : null;
+  const thunder = ix2.some((i) => h.code[i] >= 95) || !!lightning;
   const maybe = !thunder && ix2.some((i) => (h.cape[i] || 0) >= 800 && (h.pop[i] || 0) >= 30);
   const rainMax = Math.max(0, ...ix.map((i) => h.rain[i] || 0));
-  f.storm = { v: thunder, maybe, pop: mx("pop"), rain: ix.reduce((a, i) => a + (h.rain[i] || 0), 0), rainMax, cls: lvl(thunder || rainMax >= RAIN_STOP ? 2 : maybe || rainMax >= RAIN_CAUTION ? 1 : 0) };
+  f.storm = { v: thunder, lightning, maybe, pop: mx("pop"), rain: ix.reduce((a, i) => a + (h.rain[i] || 0), 0), rainMax, cls: lvl(thunder || rainMax >= RAIN_STOP ? 2 : maybe || rainMax >= RAIN_CAUTION ? 1 : 0) };
   const vmin = mn("vis") / 1000; const wt = o.waterTemp; const tmin = mn("t");
   const steam = wt - tmin >= 8 && wmax < 15; const spread = Math.min(...ix.map((i) => h.t[i] - h.dew[i]));
   f.vis = { v: vmin, steam, spread, cls: lvl(vmin <= L.visS ? 2 : vmin <= L.visC || steam || spread <= 1 ? 1 : 0) };
@@ -69,7 +72,7 @@ function callCore(o) {
   if (dark) worst = Math.max(worst, 1);
   return { cls: ["go", "caution", "stop"][worst], word: ["Go", "Caution", "Stay ashore"][worst], f, start, end, code: h.code[di], temp: h.t[di] };
 }
-const stormWord = (s) => (s.v ? "thunderstorm forecast" : s.maybe ? "thunder possible" : rainWord(s.rainMax));
+const stormWord = (s) => (s.lightning ? "lightning detected nearby" : s.v ? "thunderstorm forecast" : s.maybe ? "thunder possible" : rainWord(s.rainMax));
 
 /* ---------- change detection for watched rows ---------- */
 const FACTORS = { wind: "Wind", waves: "Waves", vis: "Visibility", storm: "Rain and storms", cold: "Cold", light: "Light", wcap: "Whitecaps" };
@@ -82,8 +85,8 @@ function watchSummary(c) {
 function diffCall(base, now) {
   if (!base) return [];
   const rank = { go: 0, caution: 1, stop: 2 }; const out = [];
-  if (now.thunder && !base.thunder) out.push("Thunderstorm is now forecast around your row.");
-  if (!now.thunder && base.thunder) out.push("The thunderstorm risk has cleared.");
+  if (now.thunder && !base.thunder) out.push("Thunder or lightning is now a risk around your row.");
+  if (!now.thunder && base.thunder) out.push("The thunder and lightning risk has cleared.");
   if (rank[now.cls] !== rank[base.cls]) out.push(`The call went from ${base.word} to ${now.word}.`);
   Object.keys(FACTORS).forEach((k) => { if (rank[now.fc[k]] !== rank[base.fc[k]] && !(k === "storm" && now.thunder !== base.thunder)) out.push(`${FACTORS[k]}: ${base.fc[k]} to ${now.fc[k]} (${now.val[k]}).`); });
   return out;
@@ -94,3 +97,31 @@ const IDB_NAME = "rowcast-watch";
 const idbOpen = () => new Promise((res, rej) => { const q = indexedDB.open(IDB_NAME, 1); q.onupgradeneeded = () => q.result.createObjectStore("kv"); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
 const idbGet = (db, k) => new Promise((res, rej) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
 const idbSet = (db, k, v) => new Promise((res, rej) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); });
+
+
+/* ---------- lightning: Canadian Lightning Detection Network via Environment Canada GeoMet ---------- */
+const GEOMET_URL = "https://geo.weather.gc.ca/geomet";
+async function fetchTimeRange(layer) {
+  const t = await fetch(`${GEOMET_URL}?service=WMS&version=1.3.0&request=GetCapabilities&layer=${layer}`, { cache: "no-store" }).then((r) => r.text());
+  const m = /<Dimension name="time"[^>]*>\s*([^<\s]+)\s*</.exec(t); if (!m) throw new Error("no time range for " + layer);
+  const [a, b, step] = m[1].split("/"); return { start: Date.parse(a), end: Date.parse(b), step: /PT(\d+)M/.test(step) ? +/PT(\d+)M/.exec(step)[1] * 60000 : 600000 };
+}
+// Looks at the last hour of 10 minute lightning frames around a point and reports the nearest strike square.
+async function lightningScan(lat, lon, radiusKm = 100) {
+  const tr = await fetchTimeRange("Lightning_2.5km_Density"); const N = 6, px = 200, per = (radiusKm * 2) / px;
+  const R = 6378137, cosl = Math.cos((lat * Math.PI) / 180); const cx = (lon * Math.PI / 180) * R, cy = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * R, half = (radiusKm * 1000) / cosl;
+  const bbox = [cx - half, cy - half, cx + half, cy + half].map(Math.round).join(",");
+  let best = null, count = 0;
+  for (let k = 0; k < N; k++) {
+    const t = new Date(tr.end - k * tr.step).toISOString().slice(0, 19) + "Z";
+    const url = `${GEOMET_URL}?service=WMS&version=1.3.0&request=GetMap&layers=Lightning_2.5km_Density&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=${px}&height=${px}&bbox=${bbox}&time=${encodeURIComponent(t)}`;
+    const bmp = await createImageBitmap(await fetch(url).then((r) => r.blob())); const cv = new OffscreenCanvas(px, px), g = cv.getContext("2d"); g.drawImage(bmp, 0, 0);
+    const d = g.getImageData(0, 0, px, px).data; const ago = Math.max(0, Math.round((Date.now() - (tr.end - k * tr.step)) / 60000));
+    for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) {
+      if (d[(y * px + x) * 4 + 3] < 40) continue; count++;
+      const e = (x + 0.5 - px / 2) * per, n = (px / 2 - y - 0.5) * per, km = Math.hypot(e, n);
+      if (km <= radiusKm && (!best || km < best.km || (km === best.km && ago < best.ago))) best = { km, ago, bearing: ((Math.atan2(e, n) * 180) / Math.PI + 360) % 360 };
+    }
+  }
+  return { at: tr.end, radiusKm, count, nearestKm: best ? Math.round(best.km) : null, minutesAgo: best ? best.ago : null, bearing: best ? best.bearing : null };
+}
