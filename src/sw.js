@@ -20,6 +20,7 @@ const put = (cache, req, res) => { if (res && (res.ok || res.type === "opaque"))
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
+  if (req.method === "POST" && new URL(req.url).pathname.endsWith("/share-target")) { e.respondWith(handleShare(req)); return; }
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
@@ -76,3 +77,13 @@ self.addEventListener("notificationclick", (e) => {
   e.notification.close(); const url = (e.notification.data && e.notification.data.url) || "./";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => { for (const c of cs) { if ("focus" in c) { if ("navigate" in c) c.navigate(url).catch(() => {}); return c.focus(); } } return self.clients.openWindow(url); }));
 });
+
+// A GPX or TCX file shared to RowCast (Android share sheet, Files app) is parked in IndexedDB and the page imports it.
+async function handleShare(req) {
+  try {
+    const fd = await req.formData(); const out = [];
+    for (const f of fd.getAll("activity")) { if (typeof f !== "string") out.push({ name: f.name, text: await f.text() }); }
+    const db = await idbOpen(); await idbSet(db, "shared", out);
+  } catch (err) { /* the page shows nothing to import */ }
+  return Response.redirect("./?shared=1", 303);
+}

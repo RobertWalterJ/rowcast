@@ -1,7 +1,7 @@
 /* RowCast service worker. VERSION and PRECACHE are filled in by scripts/build_site.py. */
 self.window = self; // suncalc.js expects a browser global
 importScripts("callcore.js", "suncalc.js"); // the same go / caution / stay ashore rules the page uses
-const VERSION = "6a41f1d32d";
+const VERSION = "c4574f3c00";
 const PRECACHE = ["./", "apple-touch-icon.png", "callcore.js", "fc.json", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "index.html", "map_argo.json", "map_trent.json", "maplibre-gl.js", "relief.json", "relief_argo.png", "relief_trent.png", "shell_1x.png", "shell_2x.png", "shell_4x.png", "shell_8p.png", "suncalc.js", "wx.json"];
 const FONTS = "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap";
 const SHELL = "rowcast-shell-" + VERSION, RUNTIME = "rowcast-runtime";
@@ -20,6 +20,7 @@ const put = (cache, req, res) => { if (res && (res.ok || res.type === "opaque"))
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
+  if (req.method === "POST" && new URL(req.url).pathname.endsWith("/share-target")) { e.respondWith(handleShare(req)); return; }
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
@@ -76,3 +77,13 @@ self.addEventListener("notificationclick", (e) => {
   e.notification.close(); const url = (e.notification.data && e.notification.data.url) || "./";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => { for (const c of cs) { if ("focus" in c) { if ("navigate" in c) c.navigate(url).catch(() => {}); return c.focus(); } } return self.clients.openWindow(url); }));
 });
+
+// A GPX or TCX file shared to RowCast (Android share sheet, Files app) is parked in IndexedDB and the page imports it.
+async function handleShare(req) {
+  try {
+    const fd = await req.formData(); const out = [];
+    for (const f of fd.getAll("activity")) { if (typeof f !== "string") out.push({ name: f.name, text: await f.text() }); }
+    const db = await idbOpen(); await idbSet(db, "shared", out);
+  } catch (err) { /* the page shows nothing to import */ }
+  return Response.redirect("./?shared=1", 303);
+}

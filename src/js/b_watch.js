@@ -63,10 +63,11 @@ function renderAlertBar() {
 /* ---------- the button on Row call ---------- */
 function watchRow(win) {
   const on = isWatched(win);
-  return `<div class="watchrow"><button class="btn ${on ? "" : "primary"}" id="btnWatch">${on ? "Watching this row. Tap to stop" : "Watch this row"}</button>
+  return `<div class="watchrow"><button class="btn ${on ? "" : "primary"}" id="btnWatch">${on ? "Watching this row. Tap to stop" : "Watch this row"}</button><button class="btn" id="btnLogRow" style="margin-top:6px">Log how this row went</button>
     <div class="small muted">${on ? "You get an alert if the call changes, thunder appears or things improve." : "Get an alert if the call changes before launch."} Races with a start time are watched automatically. ${esc(state.bg)}</div></div>`;
 }
 function wireWatch(c, win) {
+  const lr = $("btnLogRow"); if (lr) lr.onclick = () => openLogEntry({ venue: state.venue, start: win.start, dur: win.dur });
   const b = $("btnWatch"); if (!b) return;
   b.onclick = async () => {
     const id = winId(state.venue, win.start, win.dur);

@@ -202,6 +202,7 @@ function renderDrawer() {
     <div class="dsec">Settings</div>
     <div style="padding:4px 10px 8px"><div class="small muted" style="margin-bottom:6px">Wind units</div><div class="seg" id="dUnits"><button data-u="kmh" aria-pressed="${state.unit === "kmh"}">km/h</button><button data-u="kn" aria-pressed="${state.unit === "kn"}">knots</button></div></div>
     <button class="ditem" id="dLimits"><span class="ic">${ic('<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>')}</span><span class="tx"><b>Go / no-go limits</b><span>Wind ${spd(state.limits.windC)}/${spd(state.limits.windS)} ${uLbl()} · waves ${state.limits.waveC}/${state.limits.waveS} m</span></span></button>
+    <button class="ditem" id="dLog"><span class="ic">${ic('<path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/>')}</span><span class="tx"><b>Row log</b><span>How each row went, with the weather. Import from Strava or Garmin files</span></span></button>
     <button class="ditem" id="dLegend"><span class="ic">${ic('<path d="M4 6h16M4 12h16M4 18h10"/>')}</span><span class="tx"><b>Map legend</b><span>Buoys, hazards, depth and weather symbols</span></span></button>
     <button class="ditem" id="dLayers"><span class="ic">${ic('<path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="m2 13 10 5 10-5"/>')}</span><span class="tx"><b>Map style and layers</b><span>${{ plan: "Plan", water: "On the water", dark: "Dark" }[state.mode]}</span></span></button>
     <div class="dsec">About</div>
@@ -213,7 +214,7 @@ function renderDrawer() {
   D.querySelector("#dAddEv").onclick = openAddEvent;
   D.querySelector("#dAddVen").onclick = () => openSheet("Find a venue", `<label class="field">Search<input placeholder="Lake, river, club or regatta course" disabled></label><div class="small muted">Place search, map data and forecasts for any venue come with the installed app. The prototype includes the Otonabee River and the Argonaut waters.</div>`);
   D.querySelectorAll("#dUnits button").forEach((b) => b.onclick = () => { state.unit = b.dataset.u; save(); renderDrawer(); renderLegendMini(); refreshScreen(); });
-  D.querySelector("#dLimits").onclick = openLimits; D.querySelector("#dLegend").onclick = openLegend; D.querySelector("#dLayers").onclick = openLayers; D.querySelector("#dSources").onclick = openSources;
+  D.querySelector("#dLimits").onclick = openLimits; D.querySelector("#dLegend").onclick = openLegend; D.querySelector("#dLog").onclick = openLog; D.querySelector("#dLayers").onclick = openLayers; D.querySelector("#dSources").onclick = openSources;
 }
 async function selectVenue(id) { state.venue = id; state.event = null; state.hour = 0; state.plan = null; save(); closeDrawer(); await switchVenue(); }
 async function selectEvent(id) { const e = state.events.find((x) => x.id === id); state.venue = e.venue; state.event = id; state.plan = null; save(); closeDrawer(); closeSheet(); await switchVenue(); }
