@@ -54,17 +54,17 @@ function addSpotFlow() {
 
 /* ---------- share the Row call with the crew ---------- */
 function shareRow() {
-  return `<div class="sharerow"><button class="btn primary" id="btnShare">Share with crew</button><button class="btn" id="btnCopy">Copy text</button></div>`;
+  return `<div class="sharerow"><button class="btn primary" id="btnShare">Share with crew</button><button class="btn" id="btnCard">Share as a picture</button><button class="btn" id="btnCopy">Copy text</button></div>`;
 }
 function shareText(c, win) {
   const v = V(), ev = activeEvent(), f = c.f; const wc = whitecaps(f.wind.v, f.wind.g);
   const rows = (runConditions(win) || []).filter((r) => !r.none);
-  const lines = [`ROW CALL: ${ev ? ev.name : v.name}`, `${dayLbl(c.start)}, ${c.start.slice(11)} to ${c.end.slice(11)}: ${c.word.toUpperCase()}`,
+  const lines = [`ROW CONDITIONS: ${ev ? ev.name : v.name}`, `${dayLbl(c.start)}, ${c.start.slice(11)} to ${c.end.slice(11)}`,
     `Wind ${spd(f.wind.v)} ${uLbl()}, gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}`,
     `Waves ${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + " cm" : f.waves.v.toFixed(1) + " m"}${f.waveEst ? " (estimated chop)" : ""}, whitecaps ${wc.short}`,
     `Visibility ${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)} km${f.vis.steam ? ", steam fog likely" : ""}`, `${Math.round(c.temp)}°C, feels ${Math.round(f.cold.v)}°C. ${f.light.dark ? "Nav lights on." : "Daylight."}`];
-  if (rows.length) lines.push("", "Along the run:", ...rows.map((r) => `${r.sp.name}: ${spd(r.ws)} / ${spd(r.g)} ${uLbl()}${r.hs != null ? `, ${r.hs.toFixed(1)} m` : ""} (${r.cls})`));
-  lines.push("", "Forecast estimate from RowCast, not a safety guarantee. Make your own call on the water.", shareUrl(win));
+  if (rows.length) lines.push("", "Along the run:", ...rows.map((r) => `${r.sp.name}: ${spd(r.ws)} / ${spd(r.g)} ${uLbl()}${r.hs != null ? `, ${r.hs.toFixed(1)} m` : ""}`));
+  lines.push("", "Forecast estimate from RowCast, not a safety guarantee. The call is yours.", shareUrl(win));
   return lines.join("\n");
 }
 const shareUrl = (win) => `${location.origin}${location.pathname}?s=call&v=${state.venue}&t=${encodeURIComponent(win.start)}&d=${win.dur}`;
@@ -78,6 +78,7 @@ function wireCall(c, win) {
     copyText(text);
   };
   if (cp) cp.onclick = () => copyText(shareText(c, win));
+  const cd = $("btnCard"); if (cd) cd.onclick = () => shareCardSheet(win);
 }
 async function copyText(t) { try { await navigator.clipboard.writeText(t); toast("Copied. Paste it into your crew chat."); } catch (e) { window.prompt("Copy this text", t); } }
 
