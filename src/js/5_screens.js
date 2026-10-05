@@ -62,27 +62,8 @@ function defaultWindow() {
 }
 function sunTimes(dateStr) { const v = V(); return SunCalc.getTimes(localToDate(dateStr.slice(0, 10) + "T12:00"), v.center[1], v.center[0]); }
 function computeCall(win) {
-  const v = fcVenue(); if (!v || !v.hourly) return null; const h = v.hourly; const L = state.limits;
-  const start = win.start, end = addMin(start, win.dur);
-  const ix = h.time.map((t, i) => i).filter((i) => h.time[i] >= start.slice(0, 13) + ":00" && h.time[i] < end);
-  if (!ix.length) return null;
-  const mx = (k) => Math.max(...ix.map((i) => h[k][i] ?? -1e9)), mn = (k) => Math.min(...ix.map((i) => h[k][i] ?? 1e9));
-  const f = {}; const reasons = []; let worst = 0; const lvl = (x) => { worst = Math.max(worst, x); return ["go", "caution", "stop"][x]; };
-  const wmax = mx("wind"), gmax = mx("gust"), di = ix[Math.floor(ix.length / 2)], dir = h.dir[di];
-  f.wind = { v: wmax, g: gmax, dir, cls: lvl(wmax >= L.windS || gmax >= L.gustS ? 2 : wmax >= L.windC || gmax >= L.gustC ? 1 : 0) };
-  const thunder = ix.some((i) => h.code[i] >= 95) || ix.some((i) => (h.cape[i] || 0) >= 1000 && (h.pop[i] || 0) >= 40);
-  f.storm = { v: thunder, pop: mx("pop"), rain: ix.reduce((a, i) => a + (h.rain[i] || 0), 0), cls: lvl(thunder ? 2 : mx("pop") >= 60 ? 1 : 0) };
-  const vmin = mn("vis") / 1000; const wt = waterTemp(); const tmin = mn("t");
-  const steam = wt - tmin >= 8 && wmax < 15; const spread = Math.min(...ix.map((i) => h.t[i] - h.dew[i]));
-  f.vis = { v: vmin, steam, spread, cls: lvl(vmin <= L.visS ? 2 : vmin <= L.visC || steam || spread <= 1 ? 1 : 0) };
-  let hs = null; if (v.waves) { const wv = v.waves; const wi = wv.time.map((t, i) => i).filter((i) => wv.time[i] >= start.slice(0, 13) + ":00" && wv.time[i] < end); if (wi.length) hs = Math.max(...wi.map((i) => wv.hs[i] || 0)); }
-  if (hs == null) { const U = wmax / 3.6; hs = 0.0016 * U * Math.sqrt(800 / 9.81); f.waveEst = true; }
-  f.waves = { v: hs, cls: lvl(hs >= L.waveS ? 2 : hs >= L.waveC ? 1 : 0) };
-  const fmin = mn("feels"); f.cold = { v: fmin, water: wt, cls: lvl(fmin <= L.feelsC || wt < 15 ? 1 : 0) };
-  const st = sunTimes(start); const sd = localToDate(start), ed = localToDate(end);
-  const dark = sd < st.sunrise || ed > st.sunset; f.light = { dark, sunrise: st.sunrise, sunset: st.sunset, dawn: st.dawn, ndawn: st.nauticalDawn, cls: dark ? "caution" : "go" };
-  if (dark) worst = Math.max(worst, 1);
-  return { cls: ["go", "caution", "stop"][worst], word: ["Go", "Caution", "Stay ashore"][worst], f, start, end, code: h.code[di], temp: h.t[di] };
+  const v = fcVenue(); if (!v || !v.hourly) return null;
+  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes });
 }
 function gauge(val, c, s, max, lab) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>${lab ? `<div class="lim">${lab}</div>` : ""}`; }
 function renderCall() {
@@ -92,7 +73,7 @@ function renderCall() {
   [[today, "06:30", "Today 06:30"], [today, "17:30", "Today 17:30"], [tmr, "06:30", "Tomorrow 06:30"], [tmr, "07:00", "Tomorrow 07:00"], [tmr, "09:00", "Tomorrow 09:00"], [tmr, "17:30", "Tomorrow 17:30"]]
     .forEach(([d, t, l]) => { if (`${d}T${t}` > nowLocal()) quick.push([`${d}T${t}`, l]); });
   state.races.filter((r) => r.event === (ev && ev.id)).forEach((r) => quick.unshift([addMin(r.start, -(r.marshal + r.launch)), `Race ${r.bow ? "#" + r.bow : ""} launch`]));
-  const ring = (cls) => { const segs = c ? ["wind", "waves", "vis", "storm", "cold", "light"].map((k) => c.f[k].cls) : []; const n = segs.length || 1;
+  const ring = (cls) => { const segs = c ? ["wind", "waves", "vis", "storm", "cold", "light", "wcap"].map((k) => c.f[k].cls) : []; const n = segs.length || 1;
     return `<svg viewBox="0 0 120 120">${segs.map((s, i) => { const a0 = (i / n) * Math.PI * 2 - Math.PI / 2 + 0.06, a1 = ((i + 1) / n) * Math.PI * 2 - Math.PI / 2 - 0.06;
       const p = (a) => [60 + 50 * Math.cos(a), 60 + 50 * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1);
       return `<path d="M${x0} ${y0} A50 50 0 0 1 ${x1} ${y1}" stroke="var(--${s})" stroke-width="10" fill="none" stroke-linecap="round"/>`; }).join("")}</svg>`; };
@@ -106,11 +87,12 @@ function renderCall() {
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
     ${shareRow()}
+    ${watchRow(win)}
     <div class="factors">
       <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5, `gust caution ${spd(L.gustC)} · stop ${spd(L.gustS)} ${uLbl()}`)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
       <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6, `caution ${L.waveC} · stop ${L.waveS} m`)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
       <div class="factor"><div class="top">Visibility <span class="pill ${f.vis.cls}">${f.vis.cls}</span></div><div class="val">${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)}<small>km</small></div>${gauge(20 - Math.min(20, f.vis.v), 20 - L.visC, 20 - L.visS, 20, `caution under ${L.visC} · stop under ${L.visS} km`)}<div class="note">${f.vis.steam ? `steam fog likely: water ${Math.round(f.cold.water)}°C, air ${Math.round(c.temp)}°C` : `dew-point spread ${f.vis.spread.toFixed(1)}°`}</div></div>
-      <div class="factor"><div class="top">Storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val">${f.storm.pop}<small>% rain</small></div>${gauge(f.storm.pop, 60, 95, 100, "caution 60 · stop 95 %")}<div class="note">${f.storm.v ? "thunder possible" : "no thunder signal"} · ${f.storm.rain.toFixed(1)} mm</div></div>
+      <div class="factor"><div class="top">Rain and storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val" style="font-size:1.2rem">${esc(stormWord(f.storm).replace(/^./, (x) => x.toUpperCase()))}</div>${gauge(f.storm.rainMax, RAIN_CAUTION, RAIN_STOP, 12, `caution ${RAIN_CAUTION} · stop ${RAIN_STOP} mm/h. Thunder is always a no.`)}<div class="note">${f.storm.rain.toFixed(1)} mm in the row · ${f.storm.pop}% chance${f.storm.v ? " · lightning risk" : ""}</div></div>
       <div class="factor"><div class="top">Cold <span class="pill ${f.cold.cls}">${f.cold.cls}</span></div><div class="val">${Math.round(f.cold.v)}<small>°C feels</small></div>${gauge(15 - f.cold.v, 15 - L.feelsC, 18, 25, `caution at ${L.feelsC}°C feels or below`)}<div class="note">water about ${Math.round(f.cold.water)}°C</div></div>
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
@@ -118,7 +100,7 @@ function renderCall() {
   if (c) html += whitecapCard(c.f) + runCard(win);
   html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)}</p>`;
-  $("callInner").innerHTML = html; fillWater(); wireCall(c, win);
+  $("callInner").innerHTML = html; fillWater(); wireCall(c, win); wireWatch(c, win);
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };

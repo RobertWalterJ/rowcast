@@ -91,6 +91,11 @@ h1,h2,h3{margin:0;text-wrap:balance}
 body.radar-on .legendmini{bottom:196px}
 .lim{font-size:.72rem;color:var(--muted);margin-top:-2px}
 .sharerow{display:flex;gap:8px;flex-wrap:wrap}
+.watchrow{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.alertbar{position:absolute;z-index:80;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 74px);display:flex;flex-direction:column;gap:8px}
+.alertitem{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--caution);border-radius:14px;box-shadow:var(--shadow);padding:10px 12px}
+.alertitem.stop{border-left-color:var(--stop)}.alertitem.go{border-left-color:var(--go)}
+.alertitem > div{flex:1;min-width:0}.alertitem .x{border:0;background:none;font-size:1.4rem;line-height:1;cursor:pointer;color:var(--muted)}
 .wcap .top{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .wcbar{display:inline-flex;gap:3px}.wcbar i{width:22px;height:8px;border-radius:3px;display:inline-block}
 .wcword{font-size:1.3rem;font-weight:800;margin:6px 0 4px}.wcap .note{font-size:.8rem;color:var(--muted)}
@@ -279,15 +284,112 @@ body.radar-on .legendmini{bottom:196px}
   <div class="scrim" id="scrim"></div>
   <aside class="drawer" id="drawer" aria-label="Menu"></aside>
   <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div class="sh-head"><h2 id="sheetTitle"></h2><button class="iconbtn" style="width:44px;height:44px;box-shadow:none" id="sheetClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="sh-body" id="sheetBody"></div></div>
+  <div class="alertbar" id="alertBar" hidden></div>
   <div class="toast" id="toast"></div>
 </div>
 
 <script src="maplibre-gl.js"></script>
 <script src="suncalc.js"></script>
 <script>
+/* ================= call core: the go / caution / stay ashore logic, shared by the app and the background alert checker =================
+   This file has no access to the page. The build also copies it to site/callcore.js so the service worker can run the same
+   rules when the app is closed. Keep it free of DOM, state and localStorage. */
+"use strict";
+const TZ = "America/Toronto";
+const fmtParts = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+function torLocal(d) { const p = {}; fmtParts.formatToParts(d).forEach((x) => (p[x.type] = x.value)); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; }
+function localToDate(s) { const g = new Date(s + ":00Z"); const off = new Date(torLocal(g) + ":00Z") - g; return new Date(g.getTime() - off); }
+const addMin = (s, m) => torLocal(new Date(localToDate(s).getTime() + m * 60000));
+
+const OM = "https://api.open-meteo.com/v1/forecast", OMM = "https://marine-api.open-meteo.com/v1/marine";
+const jget = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u.slice(0, 40) + " " + r.status); return r.json(); });
+const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
+
+// Point forecast in the shape the app uses (short keys).
+async function fetchPoint(v) {
+  const d = await jget(`${OM}?latitude=${v.lat}&longitude=${v.lon}&hourly=temperature_2m,apparent_temperature,dew_point_2m,precipitation_probability,precipitation,weather_code,cloud_cover_low,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cape,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,wind_speed_10m_max&timezone=America%2FToronto&past_days=1&forecast_days=5&wind_speed_unit=kmh`);
+  const h = d.hourly; const key = { temperature_2m: "t", apparent_temperature: "feels", dew_point_2m: "dew", precipitation_probability: "pop", precipitation: "rain", weather_code: "code", cloud_cover_low: "lowcloud", visibility: "vis", wind_speed_10m: "wind", wind_direction_10m: "dir", wind_gusts_10m: "gust", cape: "cape", pressure_msl: "pres" };
+  const ints = new Set(["vis", "cape", "code", "pop", "dir", "lowcloud"]); const hourly = { time: h.time };
+  Object.entries(key).forEach(([k, sh]) => { hourly[sh] = (h[k] || []).map((x) => (x == null ? null : ints.has(sh) ? Math.round(x) : r1(x))); });
+  return { hourly, daily: d.daily };
+}
+async function fetchMarine(lat, lon) {
+  const d = (await jget(`${OMM}?latitude=${lat}&longitude=${lon}&timezone=America%2FToronto&past_days=1&forecast_days=5&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_period`)).hourly;
+  return { time: d.time, hs: d.wave_height.map(r1), tp: d.wave_period.map(r1), dir: d.wave_direction, wwh: (d.wind_wave_height || []).map(r1) };
+}
+
+// Whitecaps follow steady wind and gusts closely. They start near Beaufort 4 (about 20 km/h) and spread from about 30.
+// This is an estimate from the forecast wind. Nothing in the app can see the water.
+function whitecaps(wind, gust) {
+  const e = Math.max(wind || 0, (gust || 0) * 0.7);
+  if (e < 12) return { lvl: 0, word: "none expected", short: "none" };
+  if (e < 20) return { lvl: 1, word: "a few possible", short: "a few" };
+  if (e < 29) return { lvl: 2, word: "scattered", short: "scattered" };
+  if (e < 39) return { lvl: 3, word: "many", short: "many" };
+  return { lvl: 4, word: "widespread and breaking", short: "widespread" };
+}
+// Crew practice: light rain is fine; thunder and lightning never; obvious whitecaps are a no.
+const RAIN_CAUTION = 2.5, RAIN_STOP = 7.6; // mm per hour: moderate rain is caution, heavy rain is stay ashore
+const rainWord = (mm) => (mm < 0.1 ? "dry" : mm < RAIN_CAUTION ? "light rain" : mm < RAIN_STOP ? "rain" : "heavy rain");
+
+/* o = { hourly, waves, win:{start,dur}, limits, waterTemp, sun:(dateStr) => SunCalc times } */
+function callCore(o) {
+  const h = o.hourly; const L = o.limits; const start = o.win.start, end = addMin(start, o.win.dur);
+  if (!h) return null;
+  const hr = (t) => t.slice(0, 13) + ":00";
+  const ix = h.time.map((t, i) => i).filter((i) => h.time[i] >= hr(start) && h.time[i] < end);
+  if (!ix.length) return null;
+  // thunder is checked an hour either side of the row, because storms arrive early
+  const ix2 = h.time.map((t, i) => i).filter((i) => h.time[i] >= hr(addMin(start, -60)) && h.time[i] < addMin(end, 60));
+  const mx = (k) => Math.max(...ix.map((i) => h[k][i] ?? -1e9)), mn = (k) => Math.min(...ix.map((i) => h[k][i] ?? 1e9));
+  const f = {}; let worst = 0; const lvl = (x) => { worst = Math.max(worst, x); return ["go", "caution", "stop"][x]; };
+  const wmax = mx("wind"), gmax = mx("gust"), di = ix[Math.floor(ix.length / 2)], dir = h.dir[di];
+  f.wind = { v: wmax, g: gmax, dir, di, cls: lvl(wmax >= L.windS || gmax >= L.gustS ? 2 : wmax >= L.windC || gmax >= L.gustC ? 1 : 0) };
+  const thunder = ix2.some((i) => h.code[i] >= 95);
+  const maybe = !thunder && ix2.some((i) => (h.cape[i] || 0) >= 800 && (h.pop[i] || 0) >= 30);
+  const rainMax = Math.max(0, ...ix.map((i) => h.rain[i] || 0));
+  f.storm = { v: thunder, maybe, pop: mx("pop"), rain: ix.reduce((a, i) => a + (h.rain[i] || 0), 0), rainMax, cls: lvl(thunder || rainMax >= RAIN_STOP ? 2 : maybe || rainMax >= RAIN_CAUTION ? 1 : 0) };
+  const vmin = mn("vis") / 1000; const wt = o.waterTemp; const tmin = mn("t");
+  const steam = wt - tmin >= 8 && wmax < 15; const spread = Math.min(...ix.map((i) => h.t[i] - h.dew[i]));
+  f.vis = { v: vmin, steam, spread, cls: lvl(vmin <= L.visS ? 2 : vmin <= L.visC || steam || spread <= 1 ? 1 : 0) };
+  let hs = null; if (o.waves) { const wv = o.waves; const wi = wv.time.map((t, i) => i).filter((i) => wv.time[i] >= hr(start) && wv.time[i] < end); if (wi.length) hs = Math.max(...wi.map((i) => wv.hs[i] || 0)); }
+  if (hs == null) { const U = wmax / 3.6; hs = 0.0016 * U * Math.sqrt(800 / 9.81); f.waveEst = true; }
+  f.waves = { v: hs, cls: lvl(hs >= L.waveS ? 2 : hs >= L.waveC ? 1 : 0) };
+  const fmin = mn("feels"); f.cold = { v: fmin, water: wt, cls: lvl(fmin <= L.feelsC || wt < 15 ? 1 : 0) };
+  const wc = whitecaps(wmax, gmax); f.wcap = { ...wc, cls: lvl(wc.lvl >= 3 ? 2 : wc.lvl === 2 ? 1 : 0) };
+  const st = o.sun(start); const sd = localToDate(start), ed = localToDate(end);
+  const dark = sd < st.sunrise || ed > st.sunset; f.light = { dark, sunrise: st.sunrise, sunset: st.sunset, dawn: st.dawn, ndawn: st.nauticalDawn, cls: dark ? "caution" : "go" };
+  if (dark) worst = Math.max(worst, 1);
+  return { cls: ["go", "caution", "stop"][worst], word: ["Go", "Caution", "Stay ashore"][worst], f, start, end, code: h.code[di], temp: h.t[di] };
+}
+const stormWord = (s) => (s.v ? "thunderstorm forecast" : s.maybe ? "thunder possible" : rainWord(s.rainMax));
+
+/* ---------- change detection for watched rows ---------- */
+const FACTORS = { wind: "Wind", waves: "Waves", vis: "Visibility", storm: "Rain and storms", cold: "Cold", light: "Light", wcap: "Whitecaps" };
+function watchSummary(c) {
+  const f = c.f; const fc = {}; Object.keys(FACTORS).forEach((k) => (fc[k] = f[k].cls));
+  const val = { wind: `${Math.round(f.wind.v)} km/h, gusts ${Math.round(f.wind.g)}`, waves: `${f.waves.v.toFixed(1)} m`, vis: `${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)} km`, storm: stormWord(f.storm), cold: `${Math.round(f.cold.v)}°C feels`, light: f.light.dark ? "dark part of the row" : "daylight", wcap: f.wcap.short };
+  return { cls: c.cls, word: c.word, fc, val, thunder: f.storm.v, at: Date.now() };
+}
+// Returns plain sentences describing what changed since the saved summary. Empty list means no change worth an alert.
+function diffCall(base, now) {
+  if (!base) return [];
+  const rank = { go: 0, caution: 1, stop: 2 }; const out = [];
+  if (now.thunder && !base.thunder) out.push("Thunderstorm is now forecast around your row.");
+  if (!now.thunder && base.thunder) out.push("The thunderstorm risk has cleared.");
+  if (rank[now.cls] !== rank[base.cls]) out.push(`The call went from ${base.word} to ${now.word}.`);
+  Object.keys(FACTORS).forEach((k) => { if (rank[now.fc[k]] !== rank[base.fc[k]] && !(k === "storm" && now.thunder !== base.thunder)) out.push(`${FACTORS[k]}: ${base.fc[k]} to ${now.fc[k]} (${now.val[k]}).`); });
+  return out;
+}
+
+/* ---------- tiny IndexedDB key/value store, shared by the page and the service worker ---------- */
+const IDB_NAME = "rowcast-watch";
+const idbOpen = () => new Promise((res, rej) => { const q = indexedDB.open(IDB_NAME, 1); q.onupgradeneeded = () => q.result.createObjectStore("kv"); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+const idbGet = (db, k) => new Promise((res, rej) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+const idbSet = (db, k, v) => new Promise((res, rej) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); });
+
 "use strict";
 /* ================= core: config, state, time ================= */
-const TZ = "America/Toronto";
 const VENUES = {
   trent: { id: "trent", name: "Otonabee River", place: "Peterborough, ON", kind: "venue", center: [-78.296, 44.336], zoom: 13.2,
     map: "map_trent.json", fc: "trent", water: 14, heading: 0,
@@ -321,16 +423,12 @@ if (state.races === null) state.races = [{ id: "ex1", example: true, event: "hot
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const fmtParts = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-function torLocal(d) { const p = {}; fmtParts.formatToParts(d).forEach((x) => (p[x.type] = x.value)); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; }
-function localToDate(s) { const g = new Date(s + ":00Z"); const off = new Date(torLocal(g) + ":00Z") - g; return new Date(g.getTime() - off); }
 const fmtHM = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const hm = (d) => (d instanceof Date && !isNaN(d) ? fmtHM.format(d) : "—");
 const fmtDay = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, weekday: "short", month: "short", day: "numeric" });
 const fmtWd = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, weekday: "short" });
 const dayLbl = (s) => fmtDay.format(localToDate(s.slice(0, 10) + "T12:00"));
 const wdLbl = (s) => fmtWd.format(localToDate(s.slice(0, 10) + "T12:00"));
-const addMin = (s, m) => torLocal(new Date(localToDate(s).getTime() + m * 60000));
 const nowLocal = () => torLocal(new Date());
 const spd = (v) => (v == null ? "—" : state.unit === "kn" ? Math.round(v / 1.852) : Math.round(v));
 const uLbl = () => (state.unit === "kn" ? "kn" : "km/h");
@@ -915,27 +1013,8 @@ function defaultWindow() {
 }
 function sunTimes(dateStr) { const v = V(); return SunCalc.getTimes(localToDate(dateStr.slice(0, 10) + "T12:00"), v.center[1], v.center[0]); }
 function computeCall(win) {
-  const v = fcVenue(); if (!v || !v.hourly) return null; const h = v.hourly; const L = state.limits;
-  const start = win.start, end = addMin(start, win.dur);
-  const ix = h.time.map((t, i) => i).filter((i) => h.time[i] >= start.slice(0, 13) + ":00" && h.time[i] < end);
-  if (!ix.length) return null;
-  const mx = (k) => Math.max(...ix.map((i) => h[k][i] ?? -1e9)), mn = (k) => Math.min(...ix.map((i) => h[k][i] ?? 1e9));
-  const f = {}; const reasons = []; let worst = 0; const lvl = (x) => { worst = Math.max(worst, x); return ["go", "caution", "stop"][x]; };
-  const wmax = mx("wind"), gmax = mx("gust"), di = ix[Math.floor(ix.length / 2)], dir = h.dir[di];
-  f.wind = { v: wmax, g: gmax, dir, cls: lvl(wmax >= L.windS || gmax >= L.gustS ? 2 : wmax >= L.windC || gmax >= L.gustC ? 1 : 0) };
-  const thunder = ix.some((i) => h.code[i] >= 95) || ix.some((i) => (h.cape[i] || 0) >= 1000 && (h.pop[i] || 0) >= 40);
-  f.storm = { v: thunder, pop: mx("pop"), rain: ix.reduce((a, i) => a + (h.rain[i] || 0), 0), cls: lvl(thunder ? 2 : mx("pop") >= 60 ? 1 : 0) };
-  const vmin = mn("vis") / 1000; const wt = waterTemp(); const tmin = mn("t");
-  const steam = wt - tmin >= 8 && wmax < 15; const spread = Math.min(...ix.map((i) => h.t[i] - h.dew[i]));
-  f.vis = { v: vmin, steam, spread, cls: lvl(vmin <= L.visS ? 2 : vmin <= L.visC || steam || spread <= 1 ? 1 : 0) };
-  let hs = null; if (v.waves) { const wv = v.waves; const wi = wv.time.map((t, i) => i).filter((i) => wv.time[i] >= start.slice(0, 13) + ":00" && wv.time[i] < end); if (wi.length) hs = Math.max(...wi.map((i) => wv.hs[i] || 0)); }
-  if (hs == null) { const U = wmax / 3.6; hs = 0.0016 * U * Math.sqrt(800 / 9.81); f.waveEst = true; }
-  f.waves = { v: hs, cls: lvl(hs >= L.waveS ? 2 : hs >= L.waveC ? 1 : 0) };
-  const fmin = mn("feels"); f.cold = { v: fmin, water: wt, cls: lvl(fmin <= L.feelsC || wt < 15 ? 1 : 0) };
-  const st = sunTimes(start); const sd = localToDate(start), ed = localToDate(end);
-  const dark = sd < st.sunrise || ed > st.sunset; f.light = { dark, sunrise: st.sunrise, sunset: st.sunset, dawn: st.dawn, ndawn: st.nauticalDawn, cls: dark ? "caution" : "go" };
-  if (dark) worst = Math.max(worst, 1);
-  return { cls: ["go", "caution", "stop"][worst], word: ["Go", "Caution", "Stay ashore"][worst], f, start, end, code: h.code[di], temp: h.t[di] };
+  const v = fcVenue(); if (!v || !v.hourly) return null;
+  return callCore({ hourly: v.hourly, waves: v.waves, win, limits: state.limits, waterTemp: waterTemp(), sun: sunTimes });
 }
 function gauge(val, c, s, max, lab) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>${lab ? `<div class="lim">${lab}</div>` : ""}`; }
 function renderCall() {
@@ -945,7 +1024,7 @@ function renderCall() {
   [[today, "06:30", "Today 06:30"], [today, "17:30", "Today 17:30"], [tmr, "06:30", "Tomorrow 06:30"], [tmr, "07:00", "Tomorrow 07:00"], [tmr, "09:00", "Tomorrow 09:00"], [tmr, "17:30", "Tomorrow 17:30"]]
     .forEach(([d, t, l]) => { if (`${d}T${t}` > nowLocal()) quick.push([`${d}T${t}`, l]); });
   state.races.filter((r) => r.event === (ev && ev.id)).forEach((r) => quick.unshift([addMin(r.start, -(r.marshal + r.launch)), `Race ${r.bow ? "#" + r.bow : ""} launch`]));
-  const ring = (cls) => { const segs = c ? ["wind", "waves", "vis", "storm", "cold", "light"].map((k) => c.f[k].cls) : []; const n = segs.length || 1;
+  const ring = (cls) => { const segs = c ? ["wind", "waves", "vis", "storm", "cold", "light", "wcap"].map((k) => c.f[k].cls) : []; const n = segs.length || 1;
     return `<svg viewBox="0 0 120 120">${segs.map((s, i) => { const a0 = (i / n) * Math.PI * 2 - Math.PI / 2 + 0.06, a1 = ((i + 1) / n) * Math.PI * 2 - Math.PI / 2 - 0.06;
       const p = (a) => [60 + 50 * Math.cos(a), 60 + 50 * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1);
       return `<path d="M${x0} ${y0} A50 50 0 0 1 ${x1} ${y1}" stroke="var(--${s})" stroke-width="10" fill="none" stroke-linecap="round"/>`; }).join("")}</svg>`; };
@@ -959,11 +1038,12 @@ function renderCall() {
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
     ${shareRow()}
+    ${watchRow(win)}
     <div class="factors">
       <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5, `gust caution ${spd(L.gustC)} · stop ${spd(L.gustS)} ${uLbl()}`)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
       <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6, `caution ${L.waveC} · stop ${L.waveS} m`)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
       <div class="factor"><div class="top">Visibility <span class="pill ${f.vis.cls}">${f.vis.cls}</span></div><div class="val">${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)}<small>km</small></div>${gauge(20 - Math.min(20, f.vis.v), 20 - L.visC, 20 - L.visS, 20, `caution under ${L.visC} · stop under ${L.visS} km`)}<div class="note">${f.vis.steam ? `steam fog likely: water ${Math.round(f.cold.water)}°C, air ${Math.round(c.temp)}°C` : `dew-point spread ${f.vis.spread.toFixed(1)}°`}</div></div>
-      <div class="factor"><div class="top">Storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val">${f.storm.pop}<small>% rain</small></div>${gauge(f.storm.pop, 60, 95, 100, "caution 60 · stop 95 %")}<div class="note">${f.storm.v ? "thunder possible" : "no thunder signal"} · ${f.storm.rain.toFixed(1)} mm</div></div>
+      <div class="factor"><div class="top">Rain and storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val" style="font-size:1.2rem">${esc(stormWord(f.storm).replace(/^./, (x) => x.toUpperCase()))}</div>${gauge(f.storm.rainMax, RAIN_CAUTION, RAIN_STOP, 12, `caution ${RAIN_CAUTION} · stop ${RAIN_STOP} mm/h. Thunder is always a no.`)}<div class="note">${f.storm.rain.toFixed(1)} mm in the row · ${f.storm.pop}% chance${f.storm.v ? " · lightning risk" : ""}</div></div>
       <div class="factor"><div class="top">Cold <span class="pill ${f.cold.cls}">${f.cold.cls}</span></div><div class="val">${Math.round(f.cold.v)}<small>°C feels</small></div>${gauge(15 - f.cold.v, 15 - L.feelsC, 18, 25, `caution at ${L.feelsC}°C feels or below`)}<div class="note">water about ${Math.round(f.cold.water)}°C</div></div>
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
@@ -971,7 +1051,7 @@ function renderCall() {
   if (c) html += whitecapCard(c.f) + runCard(win);
   html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)}</p>`;
-  $("callInner").innerHTML = html; fillWater(); wireCall(c, win);
+  $("callInner").innerHTML = html; fillWater(); wireCall(c, win); wireWatch(c, win);
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };
@@ -1451,12 +1531,9 @@ async function fillWater() {
 /* ================= live forecast: replaces the build-time snapshot as soon as the phone has a connection ================= */
 // The snapshot in wx.json and fc.json is only a fallback for the first paint and for offline use.
 // This file refreshes the wind grid, waves, point forecast and alerts from Open-Meteo and Environment Canada.
-const OM = "https://api.open-meteo.com/v1/forecast", OMM = "https://marine-api.open-meteo.com/v1/marine";
 const live = { at: 0, ok: false, busy: false };
-const jget = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u.slice(0, 40) + " " + r.status); return r.json(); });
 const gridPts = (w, s, e, n, nx, ny) => { const o = []; for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) o.push([n + (s - n) * (j / (ny - 1)), w + (e - w) * (i / (nx - 1))]); return o; };
 const ptsQ = (p) => `latitude=${p.map((x) => x[0].toFixed(4)).join(",")}&longitude=${p.map((x) => x[1].toFixed(4)).join(",")}`;
-const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
 const hourNow = () => nowLocal().slice(0, 13) + ":00";
 
 async function liveWind(W) {
@@ -1485,17 +1562,6 @@ async function liveWaveGrid(old) {
   return { pts: pts.map((p) => [+p[1].toFixed(4), +p[0].toFixed(4)]), time: T,
     hs: T.map((_, k) => d.map((p) => p.hourly.wave_height[i0 + k])), dir: T.map((_, k) => d.map((p) => p.hourly.wave_direction[i0 + k])), tp: T.map((_, k) => d.map((p) => p.hourly.wave_period[i0 + k])) };
 }
-async function livePoint(v) {
-  const d = await jget(`${OM}?latitude=${v.lat}&longitude=${v.lon}&hourly=temperature_2m,apparent_temperature,dew_point_2m,precipitation_probability,precipitation,weather_code,cloud_cover_low,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cape,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,wind_speed_10m_max&timezone=America%2FToronto&past_days=1&forecast_days=5&wind_speed_unit=kmh`);
-  const h = d.hourly; const key = { temperature_2m: "t", apparent_temperature: "feels", dew_point_2m: "dew", precipitation_probability: "pop", precipitation: "rain", weather_code: "code", cloud_cover_low: "lowcloud", visibility: "vis", wind_speed_10m: "wind", wind_direction_10m: "dir", wind_gusts_10m: "gust", cape: "cape", pressure_msl: "pres" };
-  const ints = new Set(["vis", "cape", "code", "pop", "dir", "lowcloud"]); const hourly = { time: h.time };
-  Object.entries(key).forEach(([k, sh]) => { hourly[sh] = (h[k] || []).map((x) => (x == null ? null : ints.has(sh) ? Math.round(x) : r1(x))); });
-  return { hourly, daily: d.daily };
-}
-async function liveMarine(lat, lon) {
-  const d = (await jget(`${OMM}?latitude=${lat}&longitude=${lon}&timezone=America%2FToronto&past_days=1&forecast_days=5&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_period`)).hourly;
-  return { time: d.time, hs: d.wave_height.map(r1), tp: d.wave_period.map(r1), dir: d.wave_direction, wwh: (d.wind_wave_height || []).map(r1) };
-}
 async function liveAlerts(v) {
   const dd = 0.08; const j = await jget(`https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=50&bbox=${v.lon - dd},${v.lat - dd},${v.lon + dd},${v.lat + dd}`);
   const seen = new Set(), out = [];
@@ -1520,8 +1586,8 @@ async function liveRefresh(force) {
   const id = state.venue, fv = fcVenue(); const wx = state.wx[id];
   const prevT = wx.wind.time[Math.min(state.hour, wx.wind.time.length - 1)];
   try {
-    const jobs = [liveWind(wx.wind), livePoint(fv), liveAlerts(fv), liveAlertShapes(fv)];
-    if (wx.waves) jobs.push(liveWaveGrid(wx.waves), liveMarine(...(id === "argo" ? [43.62, -79.42] : [fv.lat, fv.lon])));
+    const jobs = [liveWind(wx.wind), fetchPoint(fv), liveAlerts(fv), liveAlertShapes(fv)];
+    if (wx.waves) jobs.push(liveWaveGrid(wx.waves), fetchMarine(...(id === "argo" ? [43.62, -79.42] : [fv.lat, fv.lon])));
     const [wind, pt, al, shapes, waves, marine] = await Promise.all(jobs);
     wx.wind = wind; wx.alerts = shapes; if (waves) wx.waves = waves;
     Object.assign(fv, { hourly: pt.hourly, daily: pt.daily, alerts: al }); if (marine) fv.waves = marine;
@@ -1529,6 +1595,7 @@ async function liveRefresh(force) {
     const k = wind.time.indexOf(prevT); state.hour = k >= 0 ? k : 0;
   } catch (e) { console.warn("live refresh", e); live.ok = false; }
   live.busy = false; liveApplied();
+  if (typeof checkWatches === "function") checkWatches();
 }
 function liveApplied() {
   renderTime(); renderContext();
@@ -1549,21 +1616,11 @@ addEventListener("online", () => liveRefresh());
 
 /* ================= whitecaps, the run (spots along the water) and sharing the Row call ================= */
 
-// Whitecaps follow steady wind and gusts closely. They start near Beaufort 4 (about 20 km/h) and spread from about 30.
-// This is an estimate from the forecast wind. Nothing in the app can see the water.
-function whitecaps(wind, gust) {
-  const e = Math.max(wind || 0, (gust || 0) * 0.7);
-  if (e < 12) return { lvl: 0, word: "none expected", short: "none" };
-  if (e < 20) return { lvl: 1, word: "a few possible", short: "a few" };
-  if (e < 29) return { lvl: 2, word: "scattered", short: "scattered" };
-  if (e < 39) return { lvl: 3, word: "many", short: "many" };
-  return { lvl: 4, word: "widespread and breaking", short: "widespread" };
-}
 function whitecapCard(f) {
-  const wc = whitecaps(f.wind.v, f.wind.g);
+  const wc = f.wcap;
   const bar = [1, 2, 3, 4].map((i) => `<i style="background:${i <= wc.lvl ? "var(--info)" : "var(--sunk)"}"></i>`).join("");
-  return `<div class="card wcap"><div class="top"><span>Whitecaps</span><span class="wcbar">${bar}</span></div><div class="wcword">${esc(wc.word)}</div>
-    <div class="note">Estimated from wind ${spd(f.wind.v)} and gusts ${spd(f.wind.g)} ${uLbl()}. They start near 20 km/h of steady wind and spread above 30. Not seen on the water.</div></div>`;
+  return `<div class="card wcap"><div class="top"><span>Whitecaps <span class="pill ${wc.cls}">${wc.cls}</span></span><span class="wcbar">${bar}</span></div><div class="wcword">${esc(wc.word)}</div>
+    <div class="note">Estimated from wind ${spd(f.wind.v)} and gusts ${spd(f.wind.g)} ${uLbl()}. They start near 20 km/h of steady wind and spread above 30. Not seen on the water. Scattered is a caution and many is a stay ashore.</div></div>`;
 }
 
 /* ---------- spots along the run ---------- */
@@ -1646,6 +1703,121 @@ booted.then(async () => {
   if (v && VENUES[v] && v !== state.venue) await selectVenue(v);
   if (t && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(t)) { state.plan = { start: t, dur: d }; renderContext(); if (q.get("s") === "call") go("call"); }
 });
+
+/* ================= watch a row: an alert when the call changes ================= */
+// You watch a launch window (button on Row call). Races with a start time are watched automatically.
+// While the app is open the check runs every time the forecast refreshes. When it is closed, the service worker
+// runs the same rules (callcore.js) if Chrome allows periodic background checks. Chrome decides how often.
+// Nothing leaves the phone except the same public forecast requests the app already makes.
+state.watches = store.get("watches", []);       // explicit: { id, venue, start, dur, label }
+state.watchBase = store.get("watchBase", {});   // last summary per watch id: what the alert compares against
+state.alerts = store.get("alerts", []);         // recent alerts: { id, title, msgs, cls, at, start, venue }
+state.bg = "";
+
+const winId = (venue, start, dur) => `${venue}|${start}|${dur}`;
+const isWatched = (win) => state.watches.some((w) => w.id === winId(state.venue, win.start, win.dur));
+function raceTargets() {
+  return state.races.filter((r) => !r.example).map((r) => { const ev = state.events.find((e) => e.id === r.event); if (!ev) return null;
+    const start = addMin(r.start, -(r.marshal + r.launch)), dur = r.marshal + r.launch + 60;
+    return { id: winId(ev.venue, start, dur), venue: ev.venue, start, dur, label: `${r.title || "Race"} (${dayLbl(r.start)} ${r.start.slice(11)})` }; }).filter(Boolean);
+}
+function watchTargets() {
+  const now = nowLocal(), horizon = addMin(now, 5 * 24 * 60); const seen = new Set();
+  return state.watches.concat(raceTargets()).filter((t) => addMin(t.start, t.dur) > now && t.start < horizon && !seen.has(t.id) && seen.add(t.id));
+}
+function waterTempFor(vid) { const v = VENUES[vid]; if (v.water != null) return v.water; const fv = state.fc.venues[v.fc]; const o = fv && fv.buoy && fv.buoy.obs && fv.buoy.obs.find((x) => x.wtmp != null); return o ? o.wtmp : 15; }
+function computeFor(t) {
+  const v = VENUES[t.venue], fv = state.fc && state.fc.venues && state.fc.venues[v.fc]; if (!fv || !fv.hourly) return null;
+  return callCore({ hourly: fv.hourly, waves: fv.waves, win: { start: t.start, dur: t.dur }, limits: state.limits, waterTemp: waterTempFor(t.venue),
+    sun: (d) => SunCalc.getTimes(localToDate(d.slice(0, 10) + "T12:00"), v.center[1], v.center[0]) });
+}
+
+/* ---------- the check ---------- */
+async function checkWatches() {
+  if (!state.fc) return;
+  const targets = watchTargets(); const found = [];
+  for (const t of targets) {
+    if (t.venue !== state.venue) continue; // only the venue whose forecast is live right now
+    const c = computeFor(t); if (!c) continue; const sum = watchSummary(c); const base = state.watchBase[t.id];
+    if (!base) { state.watchBase[t.id] = sum; continue; }
+    const msgs = diffCall(base, sum);
+    if (msgs.length) { found.push({ id: t.id, title: `${t.label}: ${sum.word}`, msgs, cls: sum.cls, at: Date.now(), start: t.start, venue: t.venue }); state.watchBase[t.id] = sum; }
+  }
+  Object.keys(state.watchBase).forEach((k) => { if (!targets.some((t) => t.id === k)) delete state.watchBase[k]; });
+  state.watches = state.watches.filter((w) => targets.some((t) => t.id === w.id));
+  store.set("watchBase", state.watchBase); store.set("watches", state.watches);
+  if (found.length) { state.alerts = state.alerts.concat(found).slice(-10); store.set("alerts", state.alerts); found.forEach(notifyAlert); }
+  renderAlertBar(); syncWatches();
+}
+async function notifyAlert(a) {
+  if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+    try { const reg = await navigator.serviceWorker.ready; reg.showNotification(a.title, { body: a.msgs.join(" "), tag: a.id, renotify: true, icon: "icon-192.png", badge: "icon-192.png", data: { url: alertUrl(a) } }); } catch (e) { /* the banner still shows */ }
+  }
+}
+const alertUrl = (a) => `${location.pathname}?s=call&v=${a.venue}&t=${encodeURIComponent(a.start)}&d=${(a.id.split("|")[2]) || 90}`;
+
+/* ---------- the banner ---------- */
+function renderAlertBar() {
+  const bar = $("alertBar"); if (!bar) return; const list = state.alerts.slice(-2).reverse();
+  bar.hidden = !list.length;
+  bar.innerHTML = list.map((a) => `<div class="alertitem ${a.cls}"><div><b>${esc(a.title)}</b><div class="small">${a.msgs.map(esc).join(" ")}</div></div><button class="btn" data-open="${esc(alertUrl(a))}">View</button><button class="x" data-dismiss="${a.at}" aria-label="Dismiss">×</button></div>`).join("");
+  bar.querySelectorAll("[data-dismiss]").forEach((b) => b.onclick = () => { state.alerts = state.alerts.filter((a) => String(a.at) !== b.dataset.dismiss); store.set("alerts", state.alerts); renderAlertBar(); });
+  bar.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => { const u = new URL(b.dataset.open, location.origin); const q = u.searchParams;
+    state.plan = { start: q.get("t"), dur: +q.get("d") || 90 }; const go2 = () => go("call"); if (q.get("v") && q.get("v") !== state.venue) selectVenue(q.get("v")).then(go2); else go2(); });
+}
+
+/* ---------- the button on Row call ---------- */
+function watchRow(win) {
+  const on = isWatched(win);
+  return `<div class="watchrow"><button class="btn ${on ? "" : "primary"}" id="btnWatch">${on ? "Watching this row. Tap to stop" : "Watch this row"}</button>
+    <div class="small muted">${on ? "You get an alert if the call changes, thunder appears or things improve." : "Get an alert if the call changes before launch."} Races with a start time are watched automatically. ${esc(state.bg)}</div></div>`;
+}
+function wireWatch(c, win) {
+  const b = $("btnWatch"); if (!b) return;
+  b.onclick = async () => {
+    const id = winId(state.venue, win.start, win.dur);
+    if (isWatched(win)) { state.watches = state.watches.filter((w) => w.id !== id); delete state.watchBase[id]; toast("Stopped watching"); }
+    else {
+      let perm = "unsupported"; if ("Notification" in window) { perm = Notification.permission; if (perm === "default") { try { perm = await Notification.requestPermission(); } catch (e) { /* ignore */ } } }
+      const ev = activeEvent(); state.watches.push({ id, venue: state.venue, start: win.start, dur: win.dur, label: `${ev ? ev.name : V().name} ${dayLbl(win.start)} ${win.start.slice(11)}` });
+      if (c) state.watchBase[id] = watchSummary(c);
+      toast(perm === "granted" ? "Watching. You will get alerts." : "Watching. Alerts show here only, because notifications are off.");
+      enableBackground();
+    }
+    store.set("watches", state.watches); store.set("watchBase", state.watchBase); syncWatches(); renderCall(); renderAlertBar();
+  };
+}
+
+/* ---------- hand the watch list to the service worker ---------- */
+async function syncWatches() {
+  if (!state.fc || !("indexedDB" in window)) return;
+  try {
+    const db = await idbOpen(); const targets = watchTargets().map((t) => Object.assign({}, t, { base: state.watchBase[t.id] || null }));
+    const venues = {}; Object.keys(VENUES).forEach((id) => { const v = VENUES[id], fv = state.fc.venues[v.fc]; venues[id] = { lat: fv.lat, lon: fv.lon, center: v.center, marine: id === "argo" ? [43.62, -79.42] : null, water: waterTempFor(id) }; });
+    await idbSet(db, "watches", targets); await idbSet(db, "settings", { limits: state.limits, venues });
+  } catch (e) { console.warn("sync watches", e); }
+}
+// The worker may have raised alerts or moved baselines while the app was closed.
+async function pullFromWorker() {
+  if (!("indexedDB" in window)) return;
+  try {
+    const db = await idbOpen(); const ws = (await idbGet(db, "watches")) || []; const al = (await idbGet(db, "alerts")) || [];
+    ws.forEach((w) => { if (w.base && (!state.watchBase[w.id] || w.base.at > state.watchBase[w.id].at)) state.watchBase[w.id] = w.base; });
+    if (al.length) { al.forEach((a) => { if (!state.alerts.some((x) => x.at === a.at && x.id === a.id)) state.alerts.push(a); }); state.alerts = state.alerts.slice(-10); await idbSet(db, "alerts", []); }
+    store.set("watchBase", state.watchBase); store.set("alerts", state.alerts); renderAlertBar();
+  } catch (e) { console.warn("pull from worker", e); }
+}
+async function enableBackground() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (!("periodicSync" in reg)) { state.bg = "Background checks are not available here, so alerts come when you open the app."; return; }
+    const st = await navigator.permissions.query({ name: "periodic-background-sync" });
+    if (st.state !== "granted") { state.bg = "Chrome has not allowed background checks for this app yet. Alerts come when you open it."; return; }
+    await reg.periodicSync.register("rowcast-watch", { minInterval: 3 * 3600 * 1000 }); state.bg = "Background checks are on. Chrome decides how often (about every few hours).";
+  } catch (e) { state.bg = "Background checks could not be turned on. Alerts come when you open the app."; }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pullFromWorker().then(checkWatches); });
+booted.then(async () => { await pullFromWorker(); renderAlertBar(); enableBackground(); });
 
 </script>
 </body></html>

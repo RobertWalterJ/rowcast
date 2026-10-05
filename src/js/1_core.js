@@ -1,6 +1,5 @@
 "use strict";
 /* ================= core: config, state, time ================= */
-const TZ = "America/Toronto";
 const VENUES = {
   trent: { id: "trent", name: "Otonabee River", place: "Peterborough, ON", kind: "venue", center: [-78.296, 44.336], zoom: 13.2,
     map: "map_trent.json", fc: "trent", water: 14, heading: 0,
@@ -34,16 +33,12 @@ if (state.races === null) state.races = [{ id: "ex1", example: true, event: "hot
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const fmtParts = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-function torLocal(d) { const p = {}; fmtParts.formatToParts(d).forEach((x) => (p[x.type] = x.value)); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; }
-function localToDate(s) { const g = new Date(s + ":00Z"); const off = new Date(torLocal(g) + ":00Z") - g; return new Date(g.getTime() - off); }
 const fmtHM = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const hm = (d) => (d instanceof Date && !isNaN(d) ? fmtHM.format(d) : "—");
 const fmtDay = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, weekday: "short", month: "short", day: "numeric" });
 const fmtWd = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, weekday: "short" });
 const dayLbl = (s) => fmtDay.format(localToDate(s.slice(0, 10) + "T12:00"));
 const wdLbl = (s) => fmtWd.format(localToDate(s.slice(0, 10) + "T12:00"));
-const addMin = (s, m) => torLocal(new Date(localToDate(s).getTime() + m * 60000));
 const nowLocal = () => torLocal(new Date());
 const spd = (v) => (v == null ? "—" : state.unit === "kn" ? Math.round(v / 1.852) : Math.round(v));
 const uLbl = () => (state.unit === "kn" ? "kn" : "km/h");

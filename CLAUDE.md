@@ -41,12 +41,19 @@ Everything lives in `localStorage` under the `rowcast2:` prefix: venue, event, m
 
 ```
 src/app.src.html      HTML + CSS shell (MapLibre CSS and the JS get inlined)
+src/js/0_callcore.js  go / caution / stay ashore rules (callCore), whitecaps, change detection, forecast fetchers, IndexedDB helpers. No DOM. Also copied to site/callcore.js for the service worker
 src/js/1_core.js      config (VENUES, DEFAULT_EVENTS, limits), state, time helpers (all times America/Toronto)
 src/js/2_symbols.js   palettes for the 3 modes, canvas-drawn nav symbols, label images
 src/js/3_map.js       sources, cartographic layer stack, course drawing, tap readout
 src/js/4_overlay.js   wind particles, visibility/steam-fog veil, wave field (canvas over the map)
 src/js/5_screens.js   nav/chrome, row-call logic, forecast, light dial
 src/js/6_app.js       races, sheets, drawer, venue/event switching, boot
+src/js/7_native.js    Android Back button, install item, shortcuts
+src/js/8_live.js      live rain radar loop (MSC GeoMet) and water levels (CHS, Water Survey of Canada)
+src/js/9_forecast_live.js  live forecast refresh (Open-Meteo, ECCC alerts) replacing the build-time snapshot
+src/js/a_run.js       whitecap card, spots along the run, share with crew
+src/js/b_watch.js     "Watch this row": alerts when the call changes (page side; the service worker does the background side)
+Files in src/js are concatenated in filename order, so keep the 0_ to 9_ then a_ prefixes.
 src/maplibre.css      MapLibre 4.7.1 CSS (inlined at build)
 site/                 deployable output: index.html + data files + Blender sprites
 scripts/              data and build pipeline (Python 3, needs shapely, numpy, pillow, matplotlib)
@@ -163,3 +170,12 @@ This app shares `https://robertwalterj.github.io/` with all of Robert's other ap
 - Never edit a generated `docs/` by hand: fix the source and rebuild.
 - Changing the id or scope makes Chrome treat this as a new app: tell Robert to uninstall and reinstall.
 - If Chrome says "already installed" when it is not, add an in-page Install button (`beforeinstallprompt`) before anything drastic. Never suggest clearing site data for the whole origin without warning, because it resets every app's saved progress.
+
+
+## Crew practice baked into the call (Robert, Oct 2026)
+
+- Light rain is fine. Moderate rain (2.5 mm/h) is a caution, heavy (7.6 mm/h) is stay ashore.
+- Thunder or lightning is never rowed: any thunder forecast within an hour either side of the row is stay ashore; a thunder-possible signal is a caution.
+- Obvious whitecaps are a no: scattered is a caution, many is stay ashore (estimated from wind and gusts, never observed).
+- A crew check-in or shared accounts feature was considered and dropped: the crew will not use the app, and it would need a real security review.
+- Background alerts depend on Chrome's Periodic Background Sync (installed app, Chrome decides the timing). Foreground checks run on every forecast refresh.

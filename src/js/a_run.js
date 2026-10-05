@@ -1,20 +1,10 @@
 /* ================= whitecaps, the run (spots along the water) and sharing the Row call ================= */
 
-// Whitecaps follow steady wind and gusts closely. They start near Beaufort 4 (about 20 km/h) and spread from about 30.
-// This is an estimate from the forecast wind. Nothing in the app can see the water.
-function whitecaps(wind, gust) {
-  const e = Math.max(wind || 0, (gust || 0) * 0.7);
-  if (e < 12) return { lvl: 0, word: "none expected", short: "none" };
-  if (e < 20) return { lvl: 1, word: "a few possible", short: "a few" };
-  if (e < 29) return { lvl: 2, word: "scattered", short: "scattered" };
-  if (e < 39) return { lvl: 3, word: "many", short: "many" };
-  return { lvl: 4, word: "widespread and breaking", short: "widespread" };
-}
 function whitecapCard(f) {
-  const wc = whitecaps(f.wind.v, f.wind.g);
+  const wc = f.wcap;
   const bar = [1, 2, 3, 4].map((i) => `<i style="background:${i <= wc.lvl ? "var(--info)" : "var(--sunk)"}"></i>`).join("");
-  return `<div class="card wcap"><div class="top"><span>Whitecaps</span><span class="wcbar">${bar}</span></div><div class="wcword">${esc(wc.word)}</div>
-    <div class="note">Estimated from wind ${spd(f.wind.v)} and gusts ${spd(f.wind.g)} ${uLbl()}. They start near 20 km/h of steady wind and spread above 30. Not seen on the water.</div></div>`;
+  return `<div class="card wcap"><div class="top"><span>Whitecaps <span class="pill ${wc.cls}">${wc.cls}</span></span><span class="wcbar">${bar}</span></div><div class="wcword">${esc(wc.word)}</div>
+    <div class="note">Estimated from wind ${spd(f.wind.v)} and gusts ${spd(f.wind.g)} ${uLbl()}. They start near 20 km/h of steady wind and spread above 30. Not seen on the water. Scattered is a caution and many is a stay ashore.</div></div>`;
 }
 
 /* ---------- spots along the run ---------- */

@@ -91,6 +91,11 @@ h1,h2,h3{margin:0;text-wrap:balance}
 body.radar-on .legendmini{bottom:196px}
 .lim{font-size:.72rem;color:var(--muted);margin-top:-2px}
 .sharerow{display:flex;gap:8px;flex-wrap:wrap}
+.watchrow{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.alertbar{position:absolute;z-index:80;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 74px);display:flex;flex-direction:column;gap:8px}
+.alertitem{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--caution);border-radius:14px;box-shadow:var(--shadow);padding:10px 12px}
+.alertitem.stop{border-left-color:var(--stop)}.alertitem.go{border-left-color:var(--go)}
+.alertitem > div{flex:1;min-width:0}.alertitem .x{border:0;background:none;font-size:1.4rem;line-height:1;cursor:pointer;color:var(--muted)}
 .wcap .top{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .wcbar{display:inline-flex;gap:3px}.wcbar i{width:22px;height:8px;border-radius:3px;display:inline-block}
 .wcword{font-size:1.3rem;font-weight:800;margin:6px 0 4px}.wcap .note{font-size:.8rem;color:var(--muted)}
@@ -279,6 +284,7 @@ body.radar-on .legendmini{bottom:196px}
   <div class="scrim" id="scrim"></div>
   <aside class="drawer" id="drawer" aria-label="Menu"></aside>
   <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div class="sh-head"><h2 id="sheetTitle"></h2><button class="iconbtn" style="width:44px;height:44px;box-shadow:none" id="sheetClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div><div class="sh-body" id="sheetBody"></div></div>
+  <div class="alertbar" id="alertBar" hidden></div>
   <div class="toast" id="toast"></div>
 </div>
 

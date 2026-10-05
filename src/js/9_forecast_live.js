@@ -1,12 +1,9 @@
 /* ================= live forecast: replaces the build-time snapshot as soon as the phone has a connection ================= */
 // The snapshot in wx.json and fc.json is only a fallback for the first paint and for offline use.
 // This file refreshes the wind grid, waves, point forecast and alerts from Open-Meteo and Environment Canada.
-const OM = "https://api.open-meteo.com/v1/forecast", OMM = "https://marine-api.open-meteo.com/v1/marine";
 const live = { at: 0, ok: false, busy: false };
-const jget = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u.slice(0, 40) + " " + r.status); return r.json(); });
 const gridPts = (w, s, e, n, nx, ny) => { const o = []; for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) o.push([n + (s - n) * (j / (ny - 1)), w + (e - w) * (i / (nx - 1))]); return o; };
 const ptsQ = (p) => `latitude=${p.map((x) => x[0].toFixed(4)).join(",")}&longitude=${p.map((x) => x[1].toFixed(4)).join(",")}`;
-const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
 const hourNow = () => nowLocal().slice(0, 13) + ":00";
 
 async function liveWind(W) {
@@ -35,17 +32,6 @@ async function liveWaveGrid(old) {
   return { pts: pts.map((p) => [+p[1].toFixed(4), +p[0].toFixed(4)]), time: T,
     hs: T.map((_, k) => d.map((p) => p.hourly.wave_height[i0 + k])), dir: T.map((_, k) => d.map((p) => p.hourly.wave_direction[i0 + k])), tp: T.map((_, k) => d.map((p) => p.hourly.wave_period[i0 + k])) };
 }
-async function livePoint(v) {
-  const d = await jget(`${OM}?latitude=${v.lat}&longitude=${v.lon}&hourly=temperature_2m,apparent_temperature,dew_point_2m,precipitation_probability,precipitation,weather_code,cloud_cover_low,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cape,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,wind_speed_10m_max&timezone=America%2FToronto&past_days=1&forecast_days=5&wind_speed_unit=kmh`);
-  const h = d.hourly; const key = { temperature_2m: "t", apparent_temperature: "feels", dew_point_2m: "dew", precipitation_probability: "pop", precipitation: "rain", weather_code: "code", cloud_cover_low: "lowcloud", visibility: "vis", wind_speed_10m: "wind", wind_direction_10m: "dir", wind_gusts_10m: "gust", cape: "cape", pressure_msl: "pres" };
-  const ints = new Set(["vis", "cape", "code", "pop", "dir", "lowcloud"]); const hourly = { time: h.time };
-  Object.entries(key).forEach(([k, sh]) => { hourly[sh] = (h[k] || []).map((x) => (x == null ? null : ints.has(sh) ? Math.round(x) : r1(x))); });
-  return { hourly, daily: d.daily };
-}
-async function liveMarine(lat, lon) {
-  const d = (await jget(`${OMM}?latitude=${lat}&longitude=${lon}&timezone=America%2FToronto&past_days=1&forecast_days=5&hourly=wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_period`)).hourly;
-  return { time: d.time, hs: d.wave_height.map(r1), tp: d.wave_period.map(r1), dir: d.wave_direction, wwh: (d.wind_wave_height || []).map(r1) };
-}
 async function liveAlerts(v) {
   const dd = 0.08; const j = await jget(`https://api.weather.gc.ca/collections/weather-alerts/items?f=json&limit=50&bbox=${v.lon - dd},${v.lat - dd},${v.lon + dd},${v.lat + dd}`);
   const seen = new Set(), out = [];
@@ -70,8 +56,8 @@ async function liveRefresh(force) {
   const id = state.venue, fv = fcVenue(); const wx = state.wx[id];
   const prevT = wx.wind.time[Math.min(state.hour, wx.wind.time.length - 1)];
   try {
-    const jobs = [liveWind(wx.wind), livePoint(fv), liveAlerts(fv), liveAlertShapes(fv)];
-    if (wx.waves) jobs.push(liveWaveGrid(wx.waves), liveMarine(...(id === "argo" ? [43.62, -79.42] : [fv.lat, fv.lon])));
+    const jobs = [liveWind(wx.wind), fetchPoint(fv), liveAlerts(fv), liveAlertShapes(fv)];
+    if (wx.waves) jobs.push(liveWaveGrid(wx.waves), fetchMarine(...(id === "argo" ? [43.62, -79.42] : [fv.lat, fv.lon])));
     const [wind, pt, al, shapes, waves, marine] = await Promise.all(jobs);
     wx.wind = wind; wx.alerts = shapes; if (waves) wx.waves = waves;
     Object.assign(fv, { hourly: pt.hourly, daily: pt.daily, alerts: al }); if (marine) fv.waves = marine;
@@ -79,6 +65,7 @@ async function liveRefresh(force) {
     const k = wind.time.indexOf(prevT); state.hour = k >= 0 ? k : 0;
   } catch (e) { console.warn("live refresh", e); live.ok = false; }
   live.busy = false; liveApplied();
+  if (typeof checkWatches === "function") checkWatches();
 }
 function liveApplied() {
   renderTime(); renderContext();

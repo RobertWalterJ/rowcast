@@ -15,6 +15,9 @@ head = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
 open(os.path.join(ROOT, "site", "index.html"), "w").write(head + body + "</body></html>")
 print("site/index.html written")
 
+# The service worker runs the same call rules as the page, so ship the shared core as its own file too.
+shutil.copy(src("js", "0_callcore.js"), os.path.join(ROOT, "site", "callcore.js"))
+
 # PWA: copy the manifest, then write sw.js with a precache list of everything in site/ and a content-hash version.
 shutil.copy(src("manifest.webmanifest"), os.path.join(ROOT, "site", "manifest.webmanifest"))
 site = os.path.join(ROOT, "site")
