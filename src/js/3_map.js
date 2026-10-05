@@ -14,11 +14,11 @@ function initMap() {
     ["labels", "course", "courseTicks", "alerts", "windpts", "hazardPts"].forEach((s) => map.addSource(s, { type: "geojson", data: EMPTY }));
     const r = state.relief[state.venue];
     map.addSource("relief", { type: "image", url: "relief_" + state.venue + ".png", coordinates: r.relief });
-    const rd = state.wx[state.venue].radar; map.addSource("radar", { type: "image", url: rd.url, coordinates: rd.coords });
     mapReady = true;
     await loadVenueData();
     buildLayers();
     overlay.init();
+    if (state.layers.radar) radarToggle();
   });
   map.on("click", onMapClick);
   map.on("move", () => overlay.dirty = true);
@@ -38,7 +38,6 @@ async function loadVenueData() {
   const seen = new Set(); const hpu = hp.filter((f) => { const k = f.properties.kind + f.properties.name; if (f.properties.name && seen.has(k)) return false; seen.add(k); return true; });
   hazardPtsData = { type: "FeatureCollection", features: hpu }; map.getSource("hazardPts").setData(hazardPtsData);
   const r = state.relief[v.id]; map.getSource("relief").updateImage({ url: "relief_" + v.id + ".png", coordinates: r.relief });
-  const rd = state.wx[v.id].radar; map.getSource("radar").updateImage({ url: rd.url, coordinates: rd.coords });
   map.getSource("alerts").setData(state.wx[v.id].alerts || EMPTY);
   updateCourse(); updateWindPts();
 }
@@ -118,7 +117,7 @@ function buildLayers() {
     paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": 0.22 } });
   L({ id: "alerts-line", type: "line", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
     paint: { "line-color": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "#D0302A", "orange", "#E07B00", "#C9A400"], "line-width": 2, "line-opacity": 0.8 } });
-  L({ id: "radar", type: "raster", source: "radar", layout: { visibility: state.layers.radar ? "visible" : "none" }, paint: { "raster-opacity": 0.8, "raster-fade-duration": 0 } });
+  radarBuild();
   // course
   L({ id: "course-case", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": "#FFFFFF", "line-width": 7, "line-opacity": dim() ? 0.25 : 0.9 } });
   L({ id: "course", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": state.night ? "#D0503F" : cssv("--accent") || "#0B6E82", "line-width": 3.5 } });
@@ -150,7 +149,7 @@ function setLayerVis() {
   ["depth-fill", "depth-line", "lbl-depth"].forEach((id) => set(id, state.layers.depth));
   ["marks", "sm-areas"].forEach((id) => set(id, state.layers.marks));
   ["alerts-fill", "alerts-line"].forEach((id) => set(id, state.layers.alerts));
-  set("radar", state.layers.radar); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
+  radarToggle(); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
   ["course", "course-case", "course-ticks"].forEach((id) => set(id, state.layers.course));
   if (map.getLayer("relief")) map.setPaintProperty("relief", "raster-opacity", state.layers.relief ? pal().relief : 0);
   overlay.resetTrails(); overlay.dirty = true; renderLegendMini(); renderQuickChips(); save();

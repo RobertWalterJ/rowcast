@@ -14,7 +14,7 @@ function renderRaces() {
     const races = state.races.filter((r) => r.event === ev.id).sort((a, b) => a.start.localeCompare(b.start));
     html += `<div class="event"><div class="hero"><canvas id="evHero"></canvas><span class="tag">${esc(evDates(ev))}</span></div><div class="body"><h2>${esc(ev.name)}</h2>
       <div class="small">${esc(ev.detail || "")}</div><div class="small muted">${esc(ev.host || "")}${ev.entries ? " · entries on " + esc(ev.entries) : ""}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" id="btnImport">Import heat sheet</button><button class="btn" id="btnAddRace">Add a race</button>${ev.url ? `<a class="btn" href="${esc(ev.url)}" target="_blank" rel="noopener" style="text-decoration:none">Event page</a>` : ""}</div></div></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" id="btnImport">Import heat sheet</button><button class="btn" id="btnAddRace">Add a race</button>${ev.url ? `<a class="btn" href="${esc(ev.url)}" target="_blank" rel="noopener" style="text-decoration:none;color:var(--ink)">Event page</a>` : ""}</div></div></div>`;
     html += `<h2 style="font-size:1.05rem;margin-top:6px">My races</h2>`;
     if (!races.length) html += `<div class="empty">No races yet. Import your club's heat sheet or add your crew's bow number and start time.</div>`;
     races.forEach((r) => { const t = raceTimes(r); const c = condAt(r.start); const st = sunTimes(r.start); const dark = localToDate(t.launch) < st.sunrise;
@@ -105,6 +105,7 @@ function openLegend() {
       ["Wind above stop limit", (g) => { g.strokeStyle = "#C8282A"; g.lineWidth = 1.6; [6, 12, 18].forEach((y) => { g.beginPath(); g.moveTo(3, y); g.lineTo(31, y - 2); g.stroke(); }); }],
       ["Waves, low to over limit", (g) => { const gr = g.createLinearGradient(0, 0, 34, 0); gr.addColorStop(0, "rgba(40,140,190,.5)"); gr.addColorStop(.6, "rgba(230,160,30,.8)"); gr.addColorStop(1, "rgba(200,50,90,.85)"); g.fillStyle = gr; g.fillRect(0, 2, 34, 20); }],
       ["Fog veil (thicker = lower visibility)", (g) => { g.fillStyle = P.water; g.fillRect(0, 2, 34, 20); g.fillStyle = "rgba(255,255,255,.75)"; g.fillRect(0, 2, 34, 20); }],
+      ["Rain radar, light to heavy", (g) => { const gr = g.createLinearGradient(0, 0, 34, 0); ["#4aa8ff", "#00d4c8", "#18b030", "#ffe800", "#ff9a00", "#ff2a00", "#c800b4"].forEach((c, i, a) => gr.addColorStop(i / (a.length - 1), c)); g.fillStyle = gr; g.fillRect(0, 6, 34, 12); }],
       ["Weather alert area", (g) => { g.strokeStyle = "#C9A400"; g.lineWidth = 2; for (let i = -24; i < 40; i += 6) { g.beginPath(); g.moveTo(i, 24); g.lineTo(i + 24, 0); g.stroke(); } }]]],
     ["Rowing", [
       ["Your course, ticks every 250 m", (g) => { g.strokeStyle = "#fff"; g.lineWidth = 6; g.beginPath(); g.moveTo(2, 12); g.lineTo(32, 12); g.stroke(); g.strokeStyle = cssv("--accent"); g.lineWidth = 3; g.stroke(); g.fillStyle = "#fff"; g.lineWidth = 1.5; [8, 26].forEach((x) => { g.beginPath(); g.arc(x, 12, 3, 0, 7); g.fill(); g.stroke(); }); }],

@@ -84,6 +84,15 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .timebar{position:absolute;z-index:20;left:12px;right:12px;bottom:12px;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px 12px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center}
 .play{width:48px;height:48px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;grid-row:span 2}
 .play svg{width:18px;height:18px}
+.play.sm{width:40px;height:40px;grid-row:auto;flex:none}
+.radarbar{position:absolute;z-index:21;left:12px;right:12px;bottom:96px;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:8px 12px;display:flex;gap:10px;align-items:center}
+.rdrmid{flex:1;min-width:0}.rdrtop{display:flex;justify-content:space-between;gap:8px;font-size:.85rem}
+#rdrSlider{width:100%;height:32px;accent-color:var(--accent);margin:-4px 0}
+body.radar-on .legendmini{bottom:196px}
+.lim{font-size:.72rem;color:var(--muted);margin-top:-2px}
+.spark{width:100%;height:60px;display:block;margin-top:8px}
+.lkey{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:.78rem;color:var(--muted)}
+.lkey span{display:inline-flex;align-items:center;gap:5px}.lkey i{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid var(--line)}
 .timelbl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.82rem}
 .timelbl b{font-size:.95rem}
 #hourSlider{width:100%;height:44px;accent-color:var(--accent);margin:-8px 0;touch-action:pan-y}
@@ -227,6 +236,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
     <div class="legendmini" id="legendMini"></div>
     <div class="readcard" id="readCard" hidden></div>
     <div class="drawbar" id="drawBar" hidden><div style="flex:1"><b id="drawLen">0 m</b><div class="small" style="opacity:.75">Tap along the water to trace the course</div></div><button id="drawUndo" style="background:transparent;color:inherit;border:1px solid rgba(255,255,255,.3)">Undo</button><button id="drawDone" style="background:var(--accent);color:var(--accent-ink)">Save</button></div>
+    <div class="radarbar" id="radarBar" hidden></div>
     <div class="timebar" id="timeBar">
       <button class="play" id="playBtn" aria-label="Play forecast"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg></button>
       <div class="timelbl"><b id="timeLbl">—</b><span class="muted" id="timeRel">now</span></div>

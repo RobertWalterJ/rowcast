@@ -84,6 +84,15 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .timebar{position:absolute;z-index:20;left:12px;right:12px;bottom:12px;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px 12px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center}
 .play{width:48px;height:48px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;grid-row:span 2}
 .play svg{width:18px;height:18px}
+.play.sm{width:40px;height:40px;grid-row:auto;flex:none}
+.radarbar{position:absolute;z-index:21;left:12px;right:12px;bottom:96px;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:8px 12px;display:flex;gap:10px;align-items:center}
+.rdrmid{flex:1;min-width:0}.rdrtop{display:flex;justify-content:space-between;gap:8px;font-size:.85rem}
+#rdrSlider{width:100%;height:32px;accent-color:var(--accent);margin:-4px 0}
+body.radar-on .legendmini{bottom:196px}
+.lim{font-size:.72rem;color:var(--muted);margin-top:-2px}
+.spark{width:100%;height:60px;display:block;margin-top:8px}
+.lkey{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:.78rem;color:var(--muted)}
+.lkey span{display:inline-flex;align-items:center;gap:5px}.lkey i{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid var(--line)}
 .timelbl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.82rem}
 .timelbl b{font-size:.95rem}
 #hourSlider{width:100%;height:44px;accent-color:var(--accent);margin:-8px 0;touch-action:pan-y}
@@ -227,6 +236,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
     <div class="legendmini" id="legendMini"></div>
     <div class="readcard" id="readCard" hidden></div>
     <div class="drawbar" id="drawBar" hidden><div style="flex:1"><b id="drawLen">0 m</b><div class="small" style="opacity:.75">Tap along the water to trace the course</div></div><button id="drawUndo" style="background:transparent;color:inherit;border:1px solid rgba(255,255,255,.3)">Undo</button><button id="drawDone" style="background:var(--accent);color:var(--accent-ink)">Save</button></div>
+    <div class="radarbar" id="radarBar" hidden></div>
     <div class="timebar" id="timeBar">
       <button class="play" id="playBtn" aria-label="Play forecast"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg></button>
       <div class="timelbl"><b id="timeLbl">—</b><span class="muted" id="timeRel">now</span></div>
@@ -469,11 +479,11 @@ function initMap() {
     ["labels", "course", "courseTicks", "alerts", "windpts", "hazardPts"].forEach((s) => map.addSource(s, { type: "geojson", data: EMPTY }));
     const r = state.relief[state.venue];
     map.addSource("relief", { type: "image", url: "relief_" + state.venue + ".png", coordinates: r.relief });
-    const rd = state.wx[state.venue].radar; map.addSource("radar", { type: "image", url: rd.url, coordinates: rd.coords });
     mapReady = true;
     await loadVenueData();
     buildLayers();
     overlay.init();
+    if (state.layers.radar) radarToggle();
   });
   map.on("click", onMapClick);
   map.on("move", () => overlay.dirty = true);
@@ -493,7 +503,6 @@ async function loadVenueData() {
   const seen = new Set(); const hpu = hp.filter((f) => { const k = f.properties.kind + f.properties.name; if (f.properties.name && seen.has(k)) return false; seen.add(k); return true; });
   hazardPtsData = { type: "FeatureCollection", features: hpu }; map.getSource("hazardPts").setData(hazardPtsData);
   const r = state.relief[v.id]; map.getSource("relief").updateImage({ url: "relief_" + v.id + ".png", coordinates: r.relief });
-  const rd = state.wx[v.id].radar; map.getSource("radar").updateImage({ url: rd.url, coordinates: rd.coords });
   map.getSource("alerts").setData(state.wx[v.id].alerts || EMPTY);
   updateCourse(); updateWindPts();
 }
@@ -573,7 +582,7 @@ function buildLayers() {
     paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": 0.22 } });
   L({ id: "alerts-line", type: "line", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
     paint: { "line-color": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "#D0302A", "orange", "#E07B00", "#C9A400"], "line-width": 2, "line-opacity": 0.8 } });
-  L({ id: "radar", type: "raster", source: "radar", layout: { visibility: state.layers.radar ? "visible" : "none" }, paint: { "raster-opacity": 0.8, "raster-fade-duration": 0 } });
+  radarBuild();
   // course
   L({ id: "course-case", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": "#FFFFFF", "line-width": 7, "line-opacity": dim() ? 0.25 : 0.9 } });
   L({ id: "course", type: "line", source: "course", layout: { "line-cap": "round", "line-join": "round", visibility: state.layers.course ? "visible" : "none" }, paint: { "line-color": state.night ? "#D0503F" : cssv("--accent") || "#0B6E82", "line-width": 3.5 } });
@@ -605,7 +614,7 @@ function setLayerVis() {
   ["depth-fill", "depth-line", "lbl-depth"].forEach((id) => set(id, state.layers.depth));
   ["marks", "sm-areas"].forEach((id) => set(id, state.layers.marks));
   ["alerts-fill", "alerts-line"].forEach((id) => set(id, state.layers.alerts));
-  set("radar", state.layers.radar); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
+  radarToggle(); set("landmarks", state.layers.landmarks); set("windpts", state.layers.wind);
   ["course", "course-case", "course-ticks"].forEach((id) => set(id, state.layers.course));
   if (map.getLayer("relief")) map.setPaintProperty("relief", "raster-opacity", state.layers.relief ? pal().relief : 0);
   overlay.resetTrails(); overlay.dirty = true; renderLegendMini(); renderQuickChips(); save();
@@ -824,7 +833,9 @@ function renderQuickChips() {
 }
 function renderLegendMini() {
   const L = state.limits; const parts = [];
-  if (state.layers.wind) parts.push(`<div><b>Wind</b> <span class="muted">${uLbl()}</span></div><div style="display:flex;gap:6px;align-items:center"><span class="ramp" style="width:90px;background:linear-gradient(90deg,${dim() ? "#9cc" : "#0B5A6E"} 0 45%,#C87800 45% 75%,#C8282A 75%)"></span><span class="mono" style="font-size:.66rem">${spd(L.windC)} · ${spd(L.windS)}</span></div>`);
+  if (state.layers.wind) { const mx = L.windS * 1.4, c = Math.round(L.windC / mx * 100), s2 = Math.round(L.windS / mx * 100);
+    parts.push(`<div><b>Wind</b> <span class="muted">${uLbl()}</span></div><div style="display:flex;gap:6px;align-items:center"><span class="ramp" style="width:90px;background:linear-gradient(90deg,${dim() ? "#9cc" : "#0B5A6E"} 0 ${c}%,#C87800 ${c}% ${s2}%,#C8282A ${s2}%)"></span><span class="mono" style="font-size:.66rem">${spd(L.windC)} · ${spd(L.windS)}</span></div><div class="muted" style="font-size:.66rem;line-height:1.25">Lines turn amber at your caution limit, red at your stop limit.</div>`); }
+  if (state.layers.radar) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Rain</b><span class="ramp" style="width:90px;background:linear-gradient(90deg,#4aa8ff,#00d4c8 18%,#18b030 36%,#0a7a1a 55%,#ffe800 66%,#ff9a00 76%,#ff2a00 86%,#c800b4 94%,#5a1e96)"></span><span class="mono" style="font-size:.66rem">0.1 → 50+ mm/h</span></div>`);
   if (state.layers.waves && state.wx[state.venue].waves) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Waves</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,rgba(40,140,190,.4),rgba(230,160,30,.8) 60%,rgba(200,50,90,.9))"></span><span class="mono" style="font-size:.66rem">${L.waveS} m</span></div>`);
   if (state.layers.depth && V().depth) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Depth</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,${pal().depth.join(",")})"></span><span class="mono" style="font-size:.66rem">0→50 m</span></div>`);
   $("legendMini").innerHTML = parts.join("") || `<span class="muted">No weather layers on</span>`;
@@ -870,7 +881,7 @@ function computeCall(win) {
   if (dark) worst = Math.max(worst, 1);
   return { cls: ["go", "caution", "stop"][worst], word: ["Go", "Caution", "Stay ashore"][worst], f, start, end, code: h.code[di], temp: h.t[di] };
 }
-function gauge(val, c, s, max) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>`; }
+function gauge(val, c, s, max, lab) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>${lab ? `<div class="lim">${lab}</div>` : ""}`; }
 function renderCall() {
   const win = defaultWindow(); const c = computeCall(win); const L = state.limits; const ev = activeEvent();
   const quick = [];
@@ -892,16 +903,17 @@ function renderCall() {
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
     <div class="factors">
-      <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
-      <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
-      <div class="factor"><div class="top">Visibility <span class="pill ${f.vis.cls}">${f.vis.cls}</span></div><div class="val">${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)}<small>km</small></div>${gauge(20 - Math.min(20, f.vis.v), 20 - L.visC, 20 - L.visS, 20)}<div class="note">${f.vis.steam ? `steam fog likely: water ${Math.round(f.cold.water)}°C, air ${Math.round(c.temp)}°C` : `dew-point spread ${f.vis.spread.toFixed(1)}°`}</div></div>
-      <div class="factor"><div class="top">Storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val">${f.storm.pop}<small>% rain</small></div>${gauge(f.storm.pop, 60, 95, 100)}<div class="note">${f.storm.v ? "thunder possible" : "no thunder signal"} · ${f.storm.rain.toFixed(1)} mm</div></div>
-      <div class="factor"><div class="top">Cold <span class="pill ${f.cold.cls}">${f.cold.cls}</span></div><div class="val">${Math.round(f.cold.v)}<small>°C feels</small></div>${gauge(15 - f.cold.v, 15 - L.feelsC, 18, 25)}<div class="note">water about ${Math.round(f.cold.water)}°C</div></div>
+      <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5, `gust caution ${spd(L.gustC)} · stop ${spd(L.gustS)} ${uLbl()}`)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
+      <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6, `caution ${L.waveC} · stop ${L.waveS} m`)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
+      <div class="factor"><div class="top">Visibility <span class="pill ${f.vis.cls}">${f.vis.cls}</span></div><div class="val">${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)}<small>km</small></div>${gauge(20 - Math.min(20, f.vis.v), 20 - L.visC, 20 - L.visS, 20, `caution under ${L.visC} · stop under ${L.visS} km`)}<div class="note">${f.vis.steam ? `steam fog likely: water ${Math.round(f.cold.water)}°C, air ${Math.round(c.temp)}°C` : `dew-point spread ${f.vis.spread.toFixed(1)}°`}</div></div>
+      <div class="factor"><div class="top">Storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val">${f.storm.pop}<small>% rain</small></div>${gauge(f.storm.pop, 60, 95, 100, "caution 60 · stop 95 %")}<div class="note">${f.storm.v ? "thunder possible" : "no thunder signal"} · ${f.storm.rain.toFixed(1)} mm</div></div>
+      <div class="factor"><div class="top">Cold <span class="pill ${f.cold.cls}">${f.cold.cls}</span></div><div class="val">${Math.round(f.cold.v)}<small>°C feels</small></div>${gauge(15 - f.cold.v, 15 - L.feelsC, 18, 25, `caution at ${L.feelsC}°C feels or below`)}<div class="note">water about ${Math.round(f.cold.water)}°C</div></div>
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
   }
+  html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto">Prototype · forecast snapshot from ${esc(new Date(state.fc.updated).toLocaleString("en-CA", { timeZone: TZ, weekday: "short", hour: "2-digit", minute: "2-digit" }))}</p>`;
-  $("callInner").innerHTML = html;
+  $("callInner").innerHTML = html; fillWater();
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };
@@ -918,7 +930,7 @@ function renderForecast() {
   ix.forEach((i, k) => { const st = sunTimes(h.time[i]); const t = localToDate(h.time[i]); const night = t < st.sunrise || t > st.sunset;
     if (night) s += `<rect x="${k * cw}" y="0" width="${cw}" height="${H - 18}" fill="var(--ink)" opacity=".05"/>`;
     if (h.time[i].endsWith("00:00")) s += `<line x1="${k * cw}" x2="${k * cw}" y1="0" y2="${H - 14}" stroke="var(--line)"/><text x="${k * cw + 3}" y="10" style="font-weight:600">${wdLbl(h.time[i])}</text>`; });
-  [L.windC, L.windS].forEach((l, j) => s += `<line x1="0" x2="${W}" y1="${Y(l)}" y2="${Y(l)}" stroke="var(--${j ? "stop" : "caution"})" stroke-dasharray="3 4" opacity=".7"/>`);
+  [L.windC, L.windS].forEach((l, j) => s += `<line x1="0" x2="${W}" y1="${Y(l)}" y2="${Y(l)}" stroke="var(--${j ? "stop" : "caution"})" stroke-dasharray="3 4" opacity=".7"/><text x="3" y="${j ? Y(l) - 4 : Y(l) + 12}" style="fill:var(--${j ? "stop" : "caution"});font-weight:700;font-size:10px;font-family:var(--f-ui);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round">${j ? "stop" : "caution"} ${spd(l)} ${uLbl()}</text>`);
   const pts = (key) => ix.map((i, k) => `${k * cw + cw / 2},${Y(h[key][i] || 0)}`).join(" ");
   s += `<polygon points="${cw / 2},120 ${pts("gust")} ${(N - 1) * cw + cw / 2},120" fill="var(--caution)" opacity=".14"/><polyline points="${pts("gust")}" fill="none" stroke="var(--caution)" stroke-width="1.5"/>`;
   s += `<polyline points="${pts("wind")}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round"/>`;
@@ -961,7 +973,8 @@ function renderLight() {
   const mi = SunCalc.getMoonIllumination(localToDate(d + "T12:00")); const mt = SunCalc.getMoonTimes(localToDate(d + "T00:00"), v.center[1], v.center[0]);
   const rows = [["Astronomical dawn", t.nightEnd], ["Nautical dawn", t.nauticalDawn], ["Civil dawn", t.dawn], ["Sunrise", t.sunrise], ["Sunset", t.sunset], ["Civil dusk", t.dusk], ["Nautical dusk", t.nauticalDusk], ["Astronomical dusk", t.night]];
   $("lightInner").innerHTML = `<div><div class="eyebrow">${esc(dayLbl(d))} · ${esc(v.name)}</div><h1>Light</h1></div>
-   <div class="card">${s}<div class="small muted" style="text-align:center;margin-top:4px">Teal arc: your planned row (${win.start.slice(11)}, ${win.dur} min)</div></div>
+   <div class="card">${s}<div class="small muted" style="text-align:center;margin-top:4px">Teal arc: your planned row (${win.start.slice(11)}, ${win.dur} min).</div>
+     <div class="lkey"><span><i style="background:#F3D98A"></i>Daylight</span><span><i style="background:#A9B9C4"></i>Civil twilight</span><span><i style="background:#5B7C9C"></i>Nautical</span><span><i style="background:#2C4660"></i>Astronomical</span><span><i style="background:#14202B"></i>Night</span></div></div>
    <div class="card" style="display:flex;gap:12px;align-items:center"><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div>
      <div><b>Lights on before ${hm(t.sunrise)} and after ${hm(t.sunset)}</b><div class="small muted">and whenever visibility is restricted. Usable light from civil dawn ${hm(t.dawn)} to civil dusk ${hm(t.dusk)}.</div></div></div>
    <div class="card"><div class="ltimes">${rows.map(([k, x]) => `<div><span class="muted">${k}</span><b>${hm(x)}</b></div>`).join("")}<div><span class="muted">Moon ${Math.round(mi.fraction * 100)}% lit</span><b>${mt.rise ? "↑" + hm(mt.rise) : ""} ${mt.set ? "↓" + hm(mt.set) : ""}</b></div></div></div>`;
@@ -983,7 +996,7 @@ function renderRaces() {
     const races = state.races.filter((r) => r.event === ev.id).sort((a, b) => a.start.localeCompare(b.start));
     html += `<div class="event"><div class="hero"><canvas id="evHero"></canvas><span class="tag">${esc(evDates(ev))}</span></div><div class="body"><h2>${esc(ev.name)}</h2>
       <div class="small">${esc(ev.detail || "")}</div><div class="small muted">${esc(ev.host || "")}${ev.entries ? " · entries on " + esc(ev.entries) : ""}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" id="btnImport">Import heat sheet</button><button class="btn" id="btnAddRace">Add a race</button>${ev.url ? `<a class="btn" href="${esc(ev.url)}" target="_blank" rel="noopener" style="text-decoration:none">Event page</a>` : ""}</div></div></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" id="btnImport">Import heat sheet</button><button class="btn" id="btnAddRace">Add a race</button>${ev.url ? `<a class="btn" href="${esc(ev.url)}" target="_blank" rel="noopener" style="text-decoration:none;color:var(--ink)">Event page</a>` : ""}</div></div></div>`;
     html += `<h2 style="font-size:1.05rem;margin-top:6px">My races</h2>`;
     if (!races.length) html += `<div class="empty">No races yet. Import your club's heat sheet or add your crew's bow number and start time.</div>`;
     races.forEach((r) => { const t = raceTimes(r); const c = condAt(r.start); const st = sunTimes(r.start); const dark = localToDate(t.launch) < st.sunrise;
@@ -1074,6 +1087,7 @@ function openLegend() {
       ["Wind above stop limit", (g) => { g.strokeStyle = "#C8282A"; g.lineWidth = 1.6; [6, 12, 18].forEach((y) => { g.beginPath(); g.moveTo(3, y); g.lineTo(31, y - 2); g.stroke(); }); }],
       ["Waves, low to over limit", (g) => { const gr = g.createLinearGradient(0, 0, 34, 0); gr.addColorStop(0, "rgba(40,140,190,.5)"); gr.addColorStop(.6, "rgba(230,160,30,.8)"); gr.addColorStop(1, "rgba(200,50,90,.85)"); g.fillStyle = gr; g.fillRect(0, 2, 34, 20); }],
       ["Fog veil (thicker = lower visibility)", (g) => { g.fillStyle = P.water; g.fillRect(0, 2, 34, 20); g.fillStyle = "rgba(255,255,255,.75)"; g.fillRect(0, 2, 34, 20); }],
+      ["Rain radar, light to heavy", (g) => { const gr = g.createLinearGradient(0, 0, 34, 0); ["#4aa8ff", "#00d4c8", "#18b030", "#ffe800", "#ff9a00", "#ff2a00", "#c800b4"].forEach((c, i, a) => gr.addColorStop(i / (a.length - 1), c)); g.fillStyle = gr; g.fillRect(0, 6, 34, 12); }],
       ["Weather alert area", (g) => { g.strokeStyle = "#C9A400"; g.lineWidth = 2; for (let i = -24; i < 40; i += 6) { g.beginPath(); g.moveTo(i, 24); g.lineTo(i + 24, 0); g.stroke(); } }]]],
     ["Rowing", [
       ["Your course, ticks every 250 m", (g) => { g.strokeStyle = "#fff"; g.lineWidth = 6; g.beginPath(); g.moveTo(2, 12); g.lineTo(32, 12); g.stroke(); g.strokeStyle = cssv("--accent"); g.lineWidth = 3; g.stroke(); g.fillStyle = "#fff"; g.lineWidth = 1.5; [8, 26].forEach((x) => { g.beginPath(); g.arc(x, 12, 3, 0, 7); g.fill(); g.stroke(); }); }],
@@ -1255,6 +1269,122 @@ renderDrawer = function () {
 
 // Home-screen shortcuts open straight to a tab: ./?s=call, fc, light, races.
 booted.then(() => { const s = new URLSearchParams(location.search).get("s"); if (["call", "fc", "light", "races"].includes(s)) go(s); });
+
+/* ================= live data: rain radar loop (MSC GeoMet) and water levels (CHS, Water Survey of Canada) ================= */
+const GEOMET = "https://geo.weather.gc.ca/geomet";
+const radar = { frames: [], idx: 0, playing: false, timer: 0, status: "idle", fetchedAt: 0 };
+const radarTiles = (t) => `${GEOMET}?service=WMS&version=1.3.0&request=GetMap&layers=RADAR_1KM_RRAI&styles=&format=image/png&transparent=true&crs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}&time=${encodeURIComponent(t)}`;
+
+// The radar archive runs back three hours in six minute steps. We loop the last two hours, every 12 minutes.
+async function radarLoad() {
+  if (!mapReady) return;
+  radar.status = "loading"; radarBar();
+  try {
+    const res = await fetch(`${GEOMET}?service=WMS&version=1.3.0&request=GetCapabilities&layer=RADAR_1KM_RRAI`, { cache: "no-store" });
+    const m = /<Dimension name="time"[^>]*>\s*([^<\s]+)\s*</.exec(await res.text());
+    if (!m) throw new Error("no radar time range");
+    const [a, b, step] = m[1].split("/"); const t0 = Date.parse(a), t1 = Date.parse(b); const ms = /PT(\d+)M/.test(step) ? +/PT(\d+)M/.exec(step)[1] * 60000 : 360000;
+    const frames = []; for (let t = t1; t >= Math.max(t0, t1 - 120 * 60000) && frames.length < 11; t -= 2 * ms) frames.unshift(new Date(t).toISOString().slice(0, 19) + "Z");
+    if (!frames.length) throw new Error("no radar frames");
+    radarDrop(); radar.frames = frames; radar.idx = frames.length - 1; radar.fetchedAt = Date.now(); radar.status = "ok";
+    buildLayers();
+  } catch (e) { console.warn("radar", e); radar.status = "fail"; }
+  radarBar();
+}
+function radarDrop() {
+  radar.frames.forEach((_, i) => { if (map.getLayer("rdr" + i)) map.removeLayer("rdr" + i); if (map.getSource("rdr" + i)) map.removeSource("rdr" + i); });
+  radar.frames = [];
+}
+// Called from buildLayers: one hidden raster layer per frame, so the loop is smooth once the tiles are in.
+function radarBuild() {
+  radar.frames.forEach((t, i) => {
+    if (!map.getSource("rdr" + i)) map.addSource("rdr" + i, { type: "raster", tiles: [radarTiles(t)], tileSize: 256, maxzoom: 9, attribution: "Radar: ECCC MSC GeoMet" });
+    L({ id: "rdr" + i, type: "raster", source: "rdr" + i, layout: { visibility: state.layers.radar ? "visible" : "none" }, paint: { "raster-opacity": i === radar.idx ? 0.78 : 0, "raster-fade-duration": 0, "raster-resampling": "linear" } });
+  });
+}
+function radarShow(i) {
+  radar.idx = i; radar.frames.forEach((_, k) => map.getLayer("rdr" + k) && map.setPaintProperty("rdr" + k, "raster-opacity", k === i ? 0.78 : 0)); radarBar();
+}
+function radarPlay(on) {
+  radar.playing = on; clearInterval(radar.timer);
+  if (on) { radar.timer = setInterval(() => radarShow((radar.idx + 1) % radar.frames.length), 650); }
+  radarBar();
+}
+async function radarToggle() {
+  const on = state.layers.radar; document.body.classList.toggle("radar-on", on);
+  if (!on) { radarPlay(false); radar.frames.forEach((_, i) => map.getLayer("rdr" + i) && map.setLayoutProperty("rdr" + i, "visibility", "none")); radarBar(); return; }
+  if (!radar.frames.length || Date.now() - radar.fetchedAt > 6 * 60000) await radarLoad();
+  else { radar.frames.forEach((_, i) => map.getLayer("rdr" + i) && map.setLayoutProperty("rdr" + i, "visibility", "visible")); radarBar(); }
+  if (radar.status === "ok") radarPlay(true);
+}
+function radarBar() {
+  const el = $("radarBar"); if (!el) return; el.hidden = !state.layers.radar;
+  if (el.hidden) return;
+  const ok = radar.status === "ok" && radar.frames.length;
+  const t = ok ? new Date(radar.frames[radar.idx]) : null; const ago = t ? Math.round((Date.now() - t) / 60000) : 0;
+  el.innerHTML = ok ? `<button class="play sm" id="rdrPlay" aria-label="${radar.playing ? "Pause radar" : "Play radar"}">${radar.playing ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>' : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>'}</button>
+    <div class="rdrmid"><div class="rdrtop"><b>Rain radar ${torLocal(t).slice(11)}</b><span class="muted">${radar.idx === radar.frames.length - 1 ? "latest" : ago + " min ago"}</span></div>
+    <input type="range" id="rdrSlider" min="0" max="${radar.frames.length - 1}" value="${radar.idx}" aria-label="Radar time">
+    <div class="small muted">Last 2 hours of rain that has fallen. Not a forecast.</div></div>`
+    : `<div class="rdrmid"><b>Rain radar</b><div class="small muted">${radar.status === "loading" ? "Loading the latest radar…" : "Radar needs a connection. Try again when you have signal."}</div></div>${radar.status === "fail" ? '<button class="btn" id="rdrRetry">Retry</button>' : ""}`;
+  const pb = $("rdrPlay"); if (pb) pb.onclick = () => radarPlay(!radar.playing);
+  const sl = $("rdrSlider"); if (sl) sl.oninput = (e) => { radarPlay(false); radarShow(+e.target.value); };
+  const rt = $("rdrRetry"); if (rt) rt.onclick = () => radarLoad().then(() => radar.status === "ok" && radarPlay(true));
+}
+setInterval(() => { if (state.layers.radar && radar.status === "ok" && Date.now() - radar.fetchedAt > 6 * 60000 && !document.hidden) radarLoad(); }, 60000);
+
+/* ---------- water levels ---------- */
+// Lake Ontario at Toronto: CHS official gauge 13320 (metres above chart datum), observed and forecast.
+// Otonabee River: Water Survey of Canada gauge 02HJ010 near Robinsons Island (gauge height, metres).
+const WATER = {
+  argo: { kind: "lake", name: "Lake Ontario at Toronto", src: "Canadian Hydrographic Service gauge 13320" },
+  trent: { kind: "river", name: "Otonabee River near Robinsons Island", src: "Water Survey of Canada gauge 02HJ010" }
+};
+const iso = (ms) => new Date(ms).toISOString().slice(0, 19) + "Z";
+async function fetchWater(id) {
+  const now = Date.now();
+  if (id === "argo") {
+    const base = "https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/5cebf1e43d0f4a073c4bc3e5/data?time-series-code=";
+    const [o, f] = await Promise.all([fetch(`${base}wlo&from=${iso(now - 24 * 36e5)}&to=${iso(now)}`).then((r) => r.json()),
+      fetch(`${base}wlf&from=${iso(now)}&to=${iso(now + 24 * 36e5)}`).then((r) => r.json()).catch(() => [])]);
+    return { obs: o.map((p) => [Date.parse(p.eventDate), p.value]), fc: f.map((p) => [Date.parse(p.eventDate), p.value]), got: now };
+  }
+  const r = await fetch(`https://api.weather.gc.ca/collections/hydrometric-realtime/items?STATION_NUMBER=02HJ010&limit=300&sortby=-DATETIME&f=json`).then((x) => x.json());
+  const obs = r.features.map((x) => [Date.parse(x.properties.DATETIME), x.properties.LEVEL]).filter((p) => p[1] != null).sort((a, b) => a[0] - b[0]);
+  return { obs, fc: [], got: now };
+}
+async function loadWater() {
+  const id = state.venue; if (!WATER[id]) return null;
+  state.water = state.water || {};
+  const cached = state.water[id]; if (cached && Date.now() - cached.got < 10 * 60000) return cached;
+  try { const d = await fetchWater(id); if (d.obs.length) { state.water[id] = d; store.set("water-" + id, d); return d; } } catch (e) { console.warn("water", e); }
+  const old = store.get("water-" + id, null); if (old) { old.stale = true; state.water[id] = old; return old; }
+  return null;
+}
+function waterSpark(obs, fc, now) {
+  const all = obs.concat(fc); const xs = all.map((p) => p[0]), ys = all.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), lo = Math.min(...ys), hi = Math.max(...ys), pad = Math.max(0.02, (hi - lo) * 0.15);
+  const X = (t) => 4 + ((t - x0) / (x1 - x0 || 1)) * 292, Y = (v) => 6 + (1 - (v - (lo - pad)) / (hi - lo + 2 * pad)) * 48;
+  const line = (a) => a.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 300 60" class="spark" role="img" aria-label="Water level, last 24 hours${fc.length ? " and forecast" : ""}"><line x1="${X(now)}" x2="${X(now)}" y1="0" y2="60" stroke="var(--line)"/>
+    <polyline points="${line(obs)}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>${fc.length ? `<polyline points="${line(fc)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>` : ""}</svg>`;
+}
+async function fillWater() {
+  const el = $("waterCard"); if (!el) return; const w = WATER[state.venue]; if (!w) { el.remove(); return; }
+  const d = await loadWater(); if (!$("waterCard")) return;
+  if (!d) { el.innerHTML = `<h2>Water level</h2><p class="small muted">Not available right now. It needs a connection.</p>`; return; }
+  const now = Date.now(); const last = d.obs[d.obs.length - 1]; const at = (ms) => { let b = d.obs[0]; for (const p of d.obs) if (Math.abs(p[0] - ms) < Math.abs(b[0] - ms)) b = p; return b[1]; };
+  const dv = last[1] - at(last[0] - 3 * 36e5); const cm = Math.round(dv * 100); const vals = d.obs.map((p) => p[1]); const range = Math.round((Math.max(...vals) - Math.min(...vals)) * 100);
+  const trend = Math.abs(cm) < 2 ? "Steady over the last 3 hours" : `${cm > 0 ? "Rising" : "Falling"} ${Math.abs(cm)} cm in 3 hours`;
+  const ageMin = Math.round((now - last[0]) / 60000);
+  const note = w.kind === "river" ? "Rising water means a stronger current and more floating debris. Gauge height is measured from the gauge zero, not the river bottom."
+    : `The lake level moves about ${range} cm over a day here, partly from seiche (water sloshing in the lake). Heights are above chart datum, so they matter most for shallow docks and low bridges.`;
+  const fcv = d.fc.map((p) => p[1]); const fcTxt = fcv.length ? ` Forecast next 24 h: ${Math.min(...fcv).toFixed(2)} to ${Math.max(...fcv).toFixed(2)} m.` : "";
+  el.innerHTML = `<h2>Water level</h2><div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span class="val" style="font-size:1.6rem;font-weight:800">${last[1].toFixed(2)}<small style="font-size:.85rem;color:var(--muted);font-weight:600"> m</small></span><b class="${Math.abs(cm) >= 5 ? "c-caution" : ""}">${trend}</b></div>
+    ${waterSpark(d.obs, d.fc, now)}<div class="small muted" style="display:flex;justify-content:space-between"><span>24 hours ago</span><span>now${fcv.length ? " · dashed = forecast" : ""}</span></div>
+    <p class="small muted" style="margin-top:8px">${esc(w.name)}. ${esc(note)}${esc(fcTxt)}</p>
+    <p class="small muted">${esc(w.src)} · reading ${ageMin < 90 ? ageMin + " min" : Math.round(ageMin / 60) + " h"} old${d.stale ? " (saved copy, offline)" : ""}</p>`;
+}
 
 </script>
 </body></html>

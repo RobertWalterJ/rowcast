@@ -35,7 +35,9 @@ function renderQuickChips() {
 }
 function renderLegendMini() {
   const L = state.limits; const parts = [];
-  if (state.layers.wind) parts.push(`<div><b>Wind</b> <span class="muted">${uLbl()}</span></div><div style="display:flex;gap:6px;align-items:center"><span class="ramp" style="width:90px;background:linear-gradient(90deg,${dim() ? "#9cc" : "#0B5A6E"} 0 45%,#C87800 45% 75%,#C8282A 75%)"></span><span class="mono" style="font-size:.66rem">${spd(L.windC)} · ${spd(L.windS)}</span></div>`);
+  if (state.layers.wind) { const mx = L.windS * 1.4, c = Math.round(L.windC / mx * 100), s2 = Math.round(L.windS / mx * 100);
+    parts.push(`<div><b>Wind</b> <span class="muted">${uLbl()}</span></div><div style="display:flex;gap:6px;align-items:center"><span class="ramp" style="width:90px;background:linear-gradient(90deg,${dim() ? "#9cc" : "#0B5A6E"} 0 ${c}%,#C87800 ${c}% ${s2}%,#C8282A ${s2}%)"></span><span class="mono" style="font-size:.66rem">${spd(L.windC)} · ${spd(L.windS)}</span></div><div class="muted" style="font-size:.66rem;line-height:1.25">Lines turn amber at your caution limit, red at your stop limit.</div>`); }
+  if (state.layers.radar) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Rain</b><span class="ramp" style="width:90px;background:linear-gradient(90deg,#4aa8ff,#00d4c8 18%,#18b030 36%,#0a7a1a 55%,#ffe800 66%,#ff9a00 76%,#ff2a00 86%,#c800b4 94%,#5a1e96)"></span><span class="mono" style="font-size:.66rem">0.1 → 50+ mm/h</span></div>`);
   if (state.layers.waves && state.wx[state.venue].waves) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Waves</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,rgba(40,140,190,.4),rgba(230,160,30,.8) 60%,rgba(200,50,90,.9))"></span><span class="mono" style="font-size:.66rem">${L.waveS} m</span></div>`);
   if (state.layers.depth && V().depth) parts.push(`<div style="display:flex;gap:6px;align-items:center"><b>Depth</b><span class="ramp" style="width:70px;background:linear-gradient(90deg,${pal().depth.join(",")})"></span><span class="mono" style="font-size:.66rem">0→50 m</span></div>`);
   $("legendMini").innerHTML = parts.join("") || `<span class="muted">No weather layers on</span>`;
@@ -81,7 +83,7 @@ function computeCall(win) {
   if (dark) worst = Math.max(worst, 1);
   return { cls: ["go", "caution", "stop"][worst], word: ["Go", "Caution", "Stay ashore"][worst], f, start, end, code: h.code[di], temp: h.t[di] };
 }
-function gauge(val, c, s, max) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>`; }
+function gauge(val, c, s, max, lab) { const p = (x) => Math.max(0, Math.min(100, (x / max) * 100)); return `<div class="gauge" style="--a:${p(c)}%;--b:${p(s)}%"><i style="left:${p(val)}%"></i></div>${lab ? `<div class="lim">${lab}</div>` : ""}`; }
 function renderCall() {
   const win = defaultWindow(); const c = computeCall(win); const L = state.limits; const ev = activeEvent();
   const quick = [];
@@ -103,16 +105,17 @@ function renderCall() {
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
     <div class="factors">
-      <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
-      <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
-      <div class="factor"><div class="top">Visibility <span class="pill ${f.vis.cls}">${f.vis.cls}</span></div><div class="val">${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)}<small>km</small></div>${gauge(20 - Math.min(20, f.vis.v), 20 - L.visC, 20 - L.visS, 20)}<div class="note">${f.vis.steam ? `steam fog likely: water ${Math.round(f.cold.water)}°C, air ${Math.round(c.temp)}°C` : `dew-point spread ${f.vis.spread.toFixed(1)}°`}</div></div>
-      <div class="factor"><div class="top">Storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val">${f.storm.pop}<small>% rain</small></div>${gauge(f.storm.pop, 60, 95, 100)}<div class="note">${f.storm.v ? "thunder possible" : "no thunder signal"} · ${f.storm.rain.toFixed(1)} mm</div></div>
-      <div class="factor"><div class="top">Cold <span class="pill ${f.cold.cls}">${f.cold.cls}</span></div><div class="val">${Math.round(f.cold.v)}<small>°C feels</small></div>${gauge(15 - f.cold.v, 15 - L.feelsC, 18, 25)}<div class="note">water about ${Math.round(f.cold.water)}°C</div></div>
+      <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5, `gust caution ${spd(L.gustC)} · stop ${spd(L.gustS)} ${uLbl()}`)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
+      <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6, `caution ${L.waveC} · stop ${L.waveS} m`)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
+      <div class="factor"><div class="top">Visibility <span class="pill ${f.vis.cls}">${f.vis.cls}</span></div><div class="val">${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)}<small>km</small></div>${gauge(20 - Math.min(20, f.vis.v), 20 - L.visC, 20 - L.visS, 20, `caution under ${L.visC} · stop under ${L.visS} km`)}<div class="note">${f.vis.steam ? `steam fog likely: water ${Math.round(f.cold.water)}°C, air ${Math.round(c.temp)}°C` : `dew-point spread ${f.vis.spread.toFixed(1)}°`}</div></div>
+      <div class="factor"><div class="top">Storms <span class="pill ${f.storm.cls}">${f.storm.cls}</span></div><div class="val">${f.storm.pop}<small>% rain</small></div>${gauge(f.storm.pop, 60, 95, 100, "caution 60 · stop 95 %")}<div class="note">${f.storm.v ? "thunder possible" : "no thunder signal"} · ${f.storm.rain.toFixed(1)} mm</div></div>
+      <div class="factor"><div class="top">Cold <span class="pill ${f.cold.cls}">${f.cold.cls}</span></div><div class="val">${Math.round(f.cold.v)}<small>°C feels</small></div>${gauge(15 - f.cold.v, 15 - L.feelsC, 18, 25, `caution at ${L.feelsC}°C feels or below`)}<div class="note">water about ${Math.round(f.cold.water)}°C</div></div>
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
   }
+  html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto">Prototype · forecast snapshot from ${esc(new Date(state.fc.updated).toLocaleString("en-CA", { timeZone: TZ, weekday: "short", hour: "2-digit", minute: "2-digit" }))}</p>`;
-  $("callInner").innerHTML = html;
+  $("callInner").innerHTML = html; fillWater();
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };
@@ -129,7 +132,7 @@ function renderForecast() {
   ix.forEach((i, k) => { const st = sunTimes(h.time[i]); const t = localToDate(h.time[i]); const night = t < st.sunrise || t > st.sunset;
     if (night) s += `<rect x="${k * cw}" y="0" width="${cw}" height="${H - 18}" fill="var(--ink)" opacity=".05"/>`;
     if (h.time[i].endsWith("00:00")) s += `<line x1="${k * cw}" x2="${k * cw}" y1="0" y2="${H - 14}" stroke="var(--line)"/><text x="${k * cw + 3}" y="10" style="font-weight:600">${wdLbl(h.time[i])}</text>`; });
-  [L.windC, L.windS].forEach((l, j) => s += `<line x1="0" x2="${W}" y1="${Y(l)}" y2="${Y(l)}" stroke="var(--${j ? "stop" : "caution"})" stroke-dasharray="3 4" opacity=".7"/>`);
+  [L.windC, L.windS].forEach((l, j) => s += `<line x1="0" x2="${W}" y1="${Y(l)}" y2="${Y(l)}" stroke="var(--${j ? "stop" : "caution"})" stroke-dasharray="3 4" opacity=".7"/><text x="3" y="${j ? Y(l) - 4 : Y(l) + 12}" style="fill:var(--${j ? "stop" : "caution"});font-weight:700;font-size:10px;font-family:var(--f-ui);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round">${j ? "stop" : "caution"} ${spd(l)} ${uLbl()}</text>`);
   const pts = (key) => ix.map((i, k) => `${k * cw + cw / 2},${Y(h[key][i] || 0)}`).join(" ");
   s += `<polygon points="${cw / 2},120 ${pts("gust")} ${(N - 1) * cw + cw / 2},120" fill="var(--caution)" opacity=".14"/><polyline points="${pts("gust")}" fill="none" stroke="var(--caution)" stroke-width="1.5"/>`;
   s += `<polyline points="${pts("wind")}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round"/>`;
@@ -172,7 +175,8 @@ function renderLight() {
   const mi = SunCalc.getMoonIllumination(localToDate(d + "T12:00")); const mt = SunCalc.getMoonTimes(localToDate(d + "T00:00"), v.center[1], v.center[0]);
   const rows = [["Astronomical dawn", t.nightEnd], ["Nautical dawn", t.nauticalDawn], ["Civil dawn", t.dawn], ["Sunrise", t.sunrise], ["Sunset", t.sunset], ["Civil dusk", t.dusk], ["Nautical dusk", t.nauticalDusk], ["Astronomical dusk", t.night]];
   $("lightInner").innerHTML = `<div><div class="eyebrow">${esc(dayLbl(d))} · ${esc(v.name)}</div><h1>Light</h1></div>
-   <div class="card">${s}<div class="small muted" style="text-align:center;margin-top:4px">Teal arc: your planned row (${win.start.slice(11)}, ${win.dur} min)</div></div>
+   <div class="card">${s}<div class="small muted" style="text-align:center;margin-top:4px">Teal arc: your planned row (${win.start.slice(11)}, ${win.dur} min).</div>
+     <div class="lkey"><span><i style="background:#F3D98A"></i>Daylight</span><span><i style="background:#A9B9C4"></i>Civil twilight</span><span><i style="background:#5B7C9C"></i>Nautical</span><span><i style="background:#2C4660"></i>Astronomical</span><span><i style="background:#14202B"></i>Night</span></div></div>
    <div class="card" style="display:flex;gap:12px;align-items:center"><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div>
      <div><b>Lights on before ${hm(t.sunrise)} and after ${hm(t.sunset)}</b><div class="small muted">and whenever visibility is restricted. Usable light from civil dawn ${hm(t.dawn)} to civil dusk ${hm(t.dusk)}.</div></div></div>
    <div class="card"><div class="ltimes">${rows.map(([k, x]) => `<div><span class="muted">${k}</span><b>${hm(x)}</b></div>`).join("")}<div><span class="muted">Moon ${Math.round(mi.fraction * 100)}% lit</span><b>${mt.rise ? "↑" + hm(mt.rise) : ""} ${mt.set ? "↓" + hm(mt.set) : ""}</b></div></div></div>`;
