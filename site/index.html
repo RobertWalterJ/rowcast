@@ -90,6 +90,12 @@ h1,h2,h3{margin:0;text-wrap:balance}
 #rdrSlider{width:100%;height:32px;accent-color:var(--accent);margin:-4px 0}
 body.radar-on .legendmini{bottom:196px}
 .lim{font-size:.72rem;color:var(--muted);margin-top:-2px}
+.sharerow{display:flex;gap:8px;flex-wrap:wrap}
+.wcap .top{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.wcbar{display:inline-flex;gap:3px}.wcbar i{width:22px;height:8px;border-radius:3px;display:inline-block}
+.wcword{font-size:1.3rem;font-weight:800;margin:6px 0 4px}.wcap .note{font-size:.8rem;color:var(--muted)}
+.runlist{display:flex;flex-direction:column;gap:10px}.runrow{display:flex;gap:10px;align-items:flex-start}
+.runrow .dot{width:12px;height:12px;border-radius:50%;margin-top:4px;flex:none}
 .spark{width:100%;height:60px;display:block;margin-top:8px}
 .lkey{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:.78rem;color:var(--muted)}
 .lkey span{display:inline-flex;align-items:center;gap:5px}.lkey i{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid var(--line)}
@@ -352,17 +358,17 @@ function waterTemp() {
 const PAL = {
   plan: { bg: "#EEF0EA", wood: "#CFE0C3", park: "#D9E8CC", grass: "#E2ECD5", wetland: "#D2E4DC", sand: "#EDE4C8", farm: "#ECEBDD", marina: "#D9E6EE",
     water: "#A8D2EC", shore: "#6A9EC4", river: "#A8D2EC", bld: "#D8D3C9", bldLine: "#C4BEB2", road: "#FFFFFF", roadCase: "#D3CFC6", major: "#FCE3A4", majorCase: "#D9AE5E",
-    rail: "#8F8F8F", bridgeCase: "#3B3B3B", pier: "#7B7F82", power: "#A35FA0", label: "#33424A", waterLabel: "#2F6E9E", halo: "rgba(255,255,255,.9)",
+    rail: "#8F8F8F", bridgeCase: "#3B3B3B", pier: "#7B7F82", bwCase: "#2E3337", bwFill: "#C4C9CC", power: "#A35FA0", label: "#33424A", waterLabel: "#2F6E9E", halo: "rgba(255,255,255,.9)",
     depth: ["#C4E2F4", "#AED6EF", "#98CAE9", "#83BDE3", "#6FB0DC", "#5DA3D4"], contour: "#5F92BB", safety: "#1D5C8C",
     hazard: "#C2185B", lock: "#1E2A33", relief: 0.6, landmark: "#1E2A33" },
   water: { bg: "#EFE4C2", wood: "#E4D7AE", park: "#E8DDB8", grass: "#EADFBA", wetland: "#DCD8B4", sand: "#F1E7C6", farm: "#EDE2BF", marina: "#E3DCC0",
     water: "#C9E4F5", shore: "#3B4650", river: "#C9E4F5", bld: "#D5C59A", bldLine: "#B8A677", road: "#E4D6AE", roadCase: "#C9B98C", major: "#DCCB98", majorCase: "#B9A56D",
-    rail: "#A9997A", bridgeCase: "#2C2C2C", pier: "#4B4F52", power: "#B0177F", label: "#4A4232", waterLabel: "#1F5F92", halo: "rgba(244,236,210,.92)",
+    rail: "#A9997A", bridgeCase: "#2C2C2C", pier: "#4B4F52", bwCase: "#23272A", bwFill: "#9AA1A6", power: "#B0177F", label: "#4A4232", waterLabel: "#1F5F92", halo: "rgba(244,236,210,.92)",
     depth: ["#79B6E2", "#97C8EA", "#B5D9F1", "#D1E8F7", "#E8F3FB", "#FFFFFF"], contour: "#4F86B3", safety: "#0D3E66",
     hazard: "#B0177F", lock: "#1B1B1B", relief: 0.35, landmark: "#1B1B1B" },
   dark: { bg: "#0E1013", wood: "#11161A", park: "#121719", grass: "#121619", wetland: "#11171A", sand: "#16150F", farm: "#121314", marina: "#101820",
     water: "#07121B", shore: "#2E4252", river: "#07121B", bld: "#1A1D21", bldLine: "#24282D", road: "#23272C", roadCase: "#16191C", major: "#3A3324", majorCase: "#1C1A14",
-    rail: "#3A3D40", bridgeCase: "#6B7177", pier: "#5A6268", power: "#7A2B5E", label: "#8C9AA4", waterLabel: "#5D8DB0", halo: "rgba(5,8,10,.85)",
+    rail: "#3A3D40", bridgeCase: "#6B7177", pier: "#5A6268", bwCase: "#0B0E10", bwFill: "#8A949B", power: "#7A2B5E", label: "#8C9AA4", waterLabel: "#5D8DB0", halo: "rgba(5,8,10,.85)",
     depth: ["#0F2B42", "#0C2336", "#0A1C2C", "#081723", "#07131D", "#061018"], contour: "#2B4D66", safety: "#5D8DB0",
     hazard: "#C2367F", lock: "#9AA7B0", relief: 0.25, landmark: "#9AA7B0" }
 };
@@ -428,7 +434,7 @@ function labelImage(map, id, text, style) {
   const P = pal(); const s = 2;
   const font = `${style.italic ? "italic " : ""}${style.weight || 600} ${style.size || 12}px Figtree, system-ui, sans-serif`;
   const m = document.createElement("canvas").getContext("2d"); m.font = font;
-  const tw = Math.ceil(m.measureText(text).width) + 8, th = Math.ceil((style.size || 12) * 1.5) + 4;
+  const tw = Math.ceil(m.measureText(text).width + (style.spacing || 0) * text.length) + 10, th = Math.ceil((style.size || 12) * 1.5) + 4;
   const c = document.createElement("canvas"); c.width = tw * s; c.height = th * s; const g = c.getContext("2d"); g.scale(s, s);
   g.font = font; g.textBaseline = "middle"; g.lineJoin = "round"; g.strokeStyle = P.halo; g.lineWidth = 3.2;
   if (style.spacing) { g.letterSpacing = style.spacing + "px"; }
@@ -527,6 +533,12 @@ function buildLabels() {
   (hazardPtsData.features || []).forEach((f) => { if (f.properties.kind !== "lock" || !f.properties.name) return;
     const id = "l" + n++; labelImage(map, id, f.properties.name.replace(/ - .*/, ""), { size: 11, weight: 700, color: P.lock });
     feats.push({ type: "Feature", geometry: f.geometry, properties: { lid: "lbl-" + id, kind: "lock", rank: 1 } }); });
+  labelImage(map, "bw", "Breakwall", { size: 11, weight: 700, spacing: 1.5, color: P.label });
+  (d.structures.features || []).filter((f) => f.properties.kind === "breakwater" && f.geometry.type === "LineString" && courseLen(f.geometry.coordinates) > 280)
+    .sort((a, b) => courseLen(b.geometry.coordinates) - courseLen(a.geometry.coordinates)).slice(0, 4)
+    .forEach((f) => feats.push({ type: "Feature", geometry: f.geometry, properties: { lid: "lbl-bw", kind: "struct" } }));
+  spotsFor().forEach((s, i) => { const id = "s" + i; labelImage(map, id, s.name, { size: 12, weight: 700, color: P.label });
+    feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [s.lon, s.lat] }, properties: { lid: "lbl-" + id, kind: "spot", rank: 0 } }); });
   if (d.depth_contours) { const used = {}; d.depth_contours.features.forEach((f) => { const dd = f.properties.d; if (used[dd] > 2) return; used[dd] = (used[dd] || 0) + 1;
     const id = "d" + n++; labelImage(map, id, dd + " m", { size: 10, weight: 600, color: P.contour });
     feats.push({ type: "Feature", geometry: f.geometry, properties: { lid: "lbl-" + id, kind: "depth" } }); }); }
@@ -566,12 +578,16 @@ function buildLayers() {
   L({ id: "road", type: "line", source: "roads", filter: ["<", ["get", "rank"], 5], layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": ["case", ["<=", ["get", "rank"], 2], P.major, P.road], "line-width": ["interpolate", ["linear"], ["zoom"], 11, ["match", ["get", "rank"], 1, 2, 2, 1.6, 3, 1, 0.3], 16, ["match", ["get", "rank"], 1, 10, 2, 8, 3, 6, 4.5]] } });
   // bridges: heavy casing over water, the chart cue a rower needs (clearance and arches)
-  L({ id: "bridge-case", type: "line", source: "roads", filter: ["==", ["get", "bridge"], 1], layout: { "line-cap": "butt" },
+  L({ id: "bridge-case", type: "line", source: "roads", filter: ["all", ["==", ["get", "bridge"], 1], ["==", ["get", "wb"], 1]], layout: { "line-cap": "butt" },
     paint: { "line-color": P.bridgeCase, "line-width": z(4, 14) } });
-  L({ id: "bridge", type: "line", source: "roads", filter: ["==", ["get", "bridge"], 1], layout: { "line-cap": "butt" },
+  L({ id: "bridge", type: "line", source: "roads", filter: ["all", ["==", ["get", "bridge"], 1], ["==", ["get", "wb"], 1]], layout: { "line-cap": "butt" },
     paint: { "line-color": chart ? P.road : "#FFFFFF", "line-width": z(2, 9) } });
-  L({ id: "rail-bridge", type: "line", source: "rail", filter: ["==", ["get", "bridge"], 1], paint: { "line-color": P.bridgeCase, "line-width": z(3, 9) } });
-  L({ id: "piers", type: "line", source: "structures", paint: { "line-color": P.pier, "line-width": z(1.5, 5) } });
+  L({ id: "rail-bridge", type: "line", source: "rail", filter: ["all", ["==", ["get", "bridge"], 1], ["==", ["get", "wb"], 1]], paint: { "line-color": P.bridgeCase, "line-width": z(3, 9) } });
+  L({ id: "piers", type: "line", source: "structures", filter: ["!=", ["get", "kind"], "breakwater"], paint: { "line-color": P.pier, "line-width": z(1.5, 5) } });
+  // breakwall: a long stone wall the crews row inside of. Dark casing, pale stone top, rubble dashes.
+  L({ id: "bw-case", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(4, 17) } });
+  L({ id: "bw", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwFill, "line-width": z(2, 11) } });
+  L({ id: "bw-rubble", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], minzoom: 12.5, layout: { "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(0.8, 3), "line-dasharray": [1.4, 1.8], "line-opacity": 0.8 } });
   L({ id: "power", type: "line", source: "power", minzoom: 12, paint: { "line-color": P.power, "line-width": 1, "line-dasharray": [6, 3] } });
   // hazards: dams/weirs in danger magenta with a hatched band, lock gates as heavy bars
   L({ id: "dam-band", type: "line", source: "hazards", filter: ["in", ["get", "kind"], ["literal", ["dam", "weir"]]], paint: { "line-color": P.hazard, "line-width": z(3, 9), "line-opacity": 0.35 } });
@@ -579,7 +595,7 @@ function buildLayers() {
   L({ id: "lockgate", type: "line", source: "hazards", filter: ["==", ["get", "kind"], "lock_gate"], paint: { "line-color": P.lock, "line-width": z(2, 5) } });
   // alerts (hatched, ECCC colour)
   L({ id: "alerts-fill", type: "fill", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
-    paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": 0.22 } });
+    paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", 0.3, "orange", 0.22, 0.09] } });
   L({ id: "alerts-line", type: "line", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
     paint: { "line-color": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "#D0302A", "orange", "#E07B00", "#C9A400"], "line-width": 2, "line-opacity": 0.8 } });
   radarBuild();
@@ -602,9 +618,10 @@ function buildLayers() {
   ic("clubs", "places", ["==", ["get", "kind"], "rowing"], "m-club", 1, { "icon-anchor": "center" });
   // labels
   buildLabels();
-  L({ id: "lbl-line", type: "symbol", source: "labels", filter: ["all", ["==", ["get", "kind"], "water"]], layout: { "symbol-placement": "line-center", "icon-image": ["get", "lid"], "icon-rotation-alignment": "map", "icon-keep-upright": true, "icon-allow-overlap": false } });
+  L({ id: "lbl-line", type: "symbol", source: "labels", filter: ["in", ["get", "kind"], ["literal", ["water", "struct"]]], layout: { "symbol-placement": "line-center", "icon-image": ["get", "lid"], "icon-rotation-alignment": "map", "icon-keep-upright": true, "icon-allow-overlap": false, "icon-offset": ["case", ["==", ["get", "kind"], "struct"], ["literal", [0, -11]], ["literal", [0, 0]]] } });
   L({ id: "lbl-depth", type: "symbol", source: "labels", filter: ["==", ["get", "kind"], "depth"], minzoom: 12.5, layout: { "symbol-placement": "line", "symbol-spacing": 400, "icon-image": ["get", "lid"], "icon-rotation-alignment": "map", "icon-keep-upright": true, visibility: state.layers.depth ? "visible" : "none" } });
-  L({ id: "lbl-pt", type: "symbol", source: "labels", filter: ["!", ["in", ["get", "kind"], ["literal", ["water", "depth"]]]], layout: { "icon-image": ["get", "lid"], "symbol-sort-key": ["coalesce", ["get", "rank"], 5], "icon-anchor": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing"]]], "left", "center"], "icon-offset": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing"]]], ["literal", [12, 0]], ["literal", [0, 0]]] } });
+  L({ id: "lbl-pt", type: "symbol", source: "labels", filter: ["!", ["in", ["get", "kind"], ["literal", ["water", "depth", "struct"]]]], layout: { "icon-image": ["get", "lid"], "symbol-sort-key": ["coalesce", ["get", "rank"], 5], "icon-anchor": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing", "spot"]]], "left", "center"], "icon-offset": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing", "spot"]]], ["literal", [12, 0]], ["literal", [0, 0]]] } });
+  L({ id: "spot-dot", type: "circle", source: "labels", filter: ["==", ["get", "kind"], "spot"], paint: { "circle-radius": 5, "circle-color": state.night ? "#D0503F" : "#0B6E82", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 2 } });
   renderLegendMini();
 }
 
@@ -668,6 +685,7 @@ function onMapClick(e) {
     ["Visibility", w ? (w.vis / 1000).toFixed(w.vis < 10000 ? 1 : 0) + ' <small class="muted">km</small>' : "—"]
   ];
   if (w && w.hs != null && inWater) cells.push(["Waves", w.hs.toFixed(1) + ' <small class="muted">m</small>']);
+  if (w && inWater) cells.push(["Whitecaps", whitecaps(w.s, w.g).short]);
   if (depth) cells.push(["Depth", `${depth.properties.min}–${depth.properties.max > 100 ? "50+" : depth.properties.max} <small class="muted">m</small>`]);
   else if (inWater && !V().depth) cells.push(["Depth", '<small class="muted">no survey</small>']);
   if (w && w.steam && inWater) cells.push(["Fog", '<span style="color:var(--info)">steam fog</span>']);
@@ -688,7 +706,7 @@ const overlay = {
   init() {
     this.wx = $("wxCanvas"); this.pt = $("ptCanvas"); this.resize();
     window.addEventListener("resize", () => this.resize());
-    this.seed(); const loop = () => { this.frame(); this.raf = requestAnimationFrame(loop); }; loop();
+    this.seed(); this.seedSea(); const loop = () => { this.frame(); this.raf = requestAnimationFrame(loop); }; loop();
   },
   resize() {
     const r = $("map").getBoundingClientRect(); this.dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -740,7 +758,9 @@ const overlay = {
     g.setTransform(d, 0, 0, d, 0, 0);
     g.globalCompositeOperation = "destination-in"; g.fillStyle = "rgba(0,0,0,0.93)"; g.fillRect(0, 0, this.cw, this.ch);
     g.globalCompositeOperation = "source-over";
-    if (!state.layers.wind || map.isMoving()) { if (map.isMoving()) g.clearRect(0, 0, this.cw, this.ch); return; }
+    if (map.isMoving()) { g.clearRect(0, 0, this.cw, this.ch); return; }
+    if (state.layers.waves) this.drawSea(g);
+    if (!state.layers.wind) return;
     const zoom = map.getZoom(); const k = 0.06 * Math.pow(1.3, zoom - 13); // px per frame per km/h
     g.lineWidth = 1.4; g.lineCap = "round";
     const buckets = {};
@@ -753,6 +773,40 @@ const overlay = {
     }
     for (const col in buckets) { g.strokeStyle = col; g.beginPath(); for (const s of buckets[col]) { g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); } g.stroke(); }
   },
+  // Wave flow: pale crest dashes travel with the wave direction (taller waves, longer crests) and white flecks
+  // appear where the wind is strong enough for whitecaps. Drawn on the water only.
+  waveDirAt(lon, lat) {
+    const wv = state.wx[state.venue].waves; if (!wv) return null; const h = Math.min(state.hour, wv.time.length - 1); let sx = 0, sy = 0;
+    wv.pts.forEach((p, i) => { const d = wv.dir[h][i]; if (d == null) return; const d2 = (p[0] - lon) ** 2 / 1.9 + (p[1] - lat) ** 2 + 1e-7, wg = 1 / d2; sx += Math.sin(d * Math.PI / 180) * wg; sy += Math.cos(d * Math.PI / 180) * wg; });
+    return sx || sy ? (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360 : null;
+  },
+  seedSea() { const n = Math.round(Math.min(650, (this.cw * this.ch) / 800)); this.wparts = []; for (let i = 0; i < n; i++) this.wparts.push(this.spawnSea()); },
+  spawnSea() { return { x: Math.random() * this.cw, y: Math.random() * this.ch, age: Math.floor(Math.random() * 40), max: 40 + Math.random() * 50, r: Math.random(), q: Math.random() }; },
+  drawSea(g) {
+    if (!this.wPath) return; if (!this.wparts || !this.wparts.length) this.seedSea();
+    const zs = Math.pow(1.3, map.getZoom() - 13); const white = [], crest = [];
+    for (const p of this.wparts) {
+      const ll = map.unproject([p.x, p.y]); const w = this.sample(ll.lng, ll.lat);
+      if (!w || p.age++ > p.max) { Object.assign(p, this.spawnSea(), { age: 0 }); continue; }
+      const wd = this.waveDirAt(ll.lng, ll.lat); const from = wd != null ? wd : w.dir; const to = ((from + 180) % 360) * Math.PI / 180;
+      const hs = w.hs != null ? w.hs : 0.0016 * (w.s / 3.6) * Math.sqrt(800 / 9.81);
+      const sp = (0.3 + 1.1 * Math.min(hs, 0.8)) * zs; const dx = Math.sin(to) * sp, dy = -Math.cos(to) * sp;
+      const wc = Math.max(0, Math.min(1, (Math.max(w.s, w.g * 0.7) - 17) / 14)), ch = Math.max(0, Math.min(1, (hs - 0.12) / 0.4));
+      if (p.r < wc) white.push([p.x, p.y, p.x + dx * 2.4, p.y + dy * 2.4]); else if (p.q < ch) crest.push([p.x, p.y, dx, dy, hs]);
+      p.x += dx; p.y += dy; if (p.x < 0 || p.y < 0 || p.x > this.cw || p.y > this.ch) Object.assign(p, this.spawnSea(), { age: 0 });
+    }
+    g.save(); g.clip(this.wPath, "evenodd"); g.lineCap = "round";
+    if (crest.length) { g.strokeStyle = state.night ? "rgba(255,140,120,.55)" : dim() ? "rgba(200,228,242,.55)" : "rgba(20,70,105,.5)"; g.lineWidth = 1.3; g.beginPath();
+      for (const [x, y, dx, dy, hs] of crest) { const m = Math.hypot(dx, dy) || 1, px = -dy / m, py = dx / m, len = (5 + hs * 26) * Math.sqrt(zs) / 2; g.moveTo(x - px * len, y - py * len); g.lineTo(x + px * len, y + py * len); } g.stroke(); }
+    if (white.length) { g.strokeStyle = state.night ? "rgba(255,205,195,.95)" : "rgba(255,255,255,.97)"; g.lineWidth = 1.8; g.beginPath(); for (const s of white) { g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); } g.stroke(); }
+    g.restore();
+  },
+  buildWaterPath() {
+    const d = state.data[state.venue]; if (!d) return null; const p2 = new Path2D();
+    const ring = (r) => { r.forEach((c, i) => { const p = map.project(c); i ? p2.lineTo(p.x, p.y) : p2.moveTo(p.x, p.y); }); p2.closePath(); };
+    d.water.features.forEach((f) => { const gm = f.geometry; (gm.type === "Polygon" ? [gm.coordinates] : gm.coordinates).forEach((poly) => poly.forEach(ring)); });
+    return p2;
+  },
   waterPath(g) {
     const d = state.data[state.venue]; if (!d) return false; g.beginPath();
     const ring = (r) => { r.forEach((c, i) => { const p = map.project(c); i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); }); g.closePath(); };
@@ -761,6 +815,7 @@ const overlay = {
   },
   drawStatic() {
     const g = this.wx.getContext("2d"); const d = this.dpr; g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, this.cw, this.ch);
+    this.wPath = this.buildWaterPath();
     const W = this.grid(); const [w, s, e, n] = W.bbox; const h = this.hourIdx();
     const a = map.project([w, n]), b = map.project([e, s]);
     // waves: colour field over open water
@@ -903,6 +958,7 @@ function renderCall() {
     const f = c.f;
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
+    ${shareRow()}
     <div class="factors">
       <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5, `gust caution ${spd(L.gustC)} · stop ${spd(L.gustS)} ${uLbl()}`)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
       <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6, `caution ${L.waveC} · stop ${L.waveS} m`)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
@@ -912,9 +968,10 @@ function renderCall() {
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
   }
+  if (c) html += whitecapCard(c.f) + runCard(win);
   html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)}</p>`;
-  $("callInner").innerHTML = html; fillWater();
+  $("callInner").innerHTML = html; fillWater(); wireCall(c, win);
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };
@@ -1489,6 +1546,106 @@ function dataStamp() {
 setInterval(() => { if (!document.hidden && dataAge() > 20) liveRefresh(); }, 120000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && dataAge() > 10) liveRefresh(); });
 addEventListener("online", () => liveRefresh());
+
+/* ================= whitecaps, the run (spots along the water) and sharing the Row call ================= */
+
+// Whitecaps follow steady wind and gusts closely. They start near Beaufort 4 (about 20 km/h) and spread from about 30.
+// This is an estimate from the forecast wind. Nothing in the app can see the water.
+function whitecaps(wind, gust) {
+  const e = Math.max(wind || 0, (gust || 0) * 0.7);
+  if (e < 12) return { lvl: 0, word: "none expected", short: "none" };
+  if (e < 20) return { lvl: 1, word: "a few possible", short: "a few" };
+  if (e < 29) return { lvl: 2, word: "scattered", short: "scattered" };
+  if (e < 39) return { lvl: 3, word: "many", short: "many" };
+  return { lvl: 4, word: "widespread and breaking", short: "widespread" };
+}
+function whitecapCard(f) {
+  const wc = whitecaps(f.wind.v, f.wind.g);
+  const bar = [1, 2, 3, 4].map((i) => `<i style="background:${i <= wc.lvl ? "var(--info)" : "var(--sunk)"}"></i>`).join("");
+  return `<div class="card wcap"><div class="top"><span>Whitecaps</span><span class="wcbar">${bar}</span></div><div class="wcword">${esc(wc.word)}</div>
+    <div class="note">Estimated from wind ${spd(f.wind.v)} and gusts ${spd(f.wind.g)} ${uLbl()}. They start near 20 km/h of steady wind and spread above 30. Not seen on the water.</div></div>`;
+}
+
+/* ---------- spots along the run ---------- */
+// Argonaut runs go inside the breakwall from the Humber River to Ontario Place, and out toward Hanlan's Point.
+const SPOTS = {
+  argo: [
+    { id: "humber", name: "Humber mouth", lon: -79.4713, lat: 43.6319 },
+    { id: "argo", name: "Argonaut RC", lon: -79.436, lat: 43.6321 },
+    { id: "onplace", name: "Ontario Place", lon: -79.4182, lat: 43.6278 },
+    { id: "hanlan", name: "Hanlan's Point", lon: -79.3893, lat: 43.6277 }
+  ],
+  trent: []
+};
+state.userSpots = store.get("spots", {});
+const spotsFor = () => (SPOTS[state.venue] || []).concat(state.userSpots[state.venue] || []);
+
+function runConditions(win) {
+  const W = state.wx[state.venue].wind; const L = state.limits;
+  const start = win.start.slice(0, 13) + ":00", end = addMin(win.start, win.dur);
+  const idx = W.time.map((t, i) => i).filter((i) => W.time[i] >= start && W.time[i] < end);
+  if (!idx.length) return null;
+  const keep = state.hour;
+  const rows = spotsFor().map((sp) => {
+    let ws = 0, g = 0, hs = null, dir = 0, any = false;
+    idx.forEach((i) => { state.hour = i; const s = overlay.sample(sp.lon, sp.lat); if (!s) return; any = true; if (s.s >= ws) { ws = s.s; dir = s.dir; } g = Math.max(g, s.g); if (s.hs != null) hs = Math.max(hs == null ? 0 : hs, s.hs); });
+    if (!any) return { sp, none: true };
+    const cw = ws >= L.windS || g >= L.gustS ? 2 : ws >= L.windC || g >= L.gustC ? 1 : 0, cs = hs == null ? 0 : hs >= L.waveS ? 2 : hs >= L.waveC ? 1 : 0;
+    return { sp, ws, g, hs, dir, cls: ["go", "caution", "stop"][Math.max(cw, cs)], wc: whitecaps(ws, g) };
+  });
+  state.hour = keep; return rows;
+}
+function runCard(win) {
+  const rows = runConditions(win);
+  const body = !rows ? `<p class="small muted">No map forecast covers that time. The map forecast runs 48 hours from now.</p>`
+    : !rows.length ? `<p class="small muted">No spots yet. Add the places along your run that you want to watch.</p>`
+    : `<div class="runlist">${rows.map((r) => r.none ? `<div class="runrow"><b>${esc(r.sp.name)}</b><span class="muted small">outside the map</span></div>`
+      : `<div class="runrow"><i class="dot" style="background:var(--${r.cls})"></i><div><b>${esc(r.sp.name)}</b><div class="small muted">wind ${spd(r.ws)}, gusts ${spd(r.g)} ${uLbl()} from ${compass(r.dir)}${r.hs != null ? ` · waves ${r.hs.toFixed(1)} m` : ""} · whitecaps ${esc(r.wc.short)}</div></div></div>`).join("")}</div>`;
+  return `<div class="card" id="runCard"><h2>Along your run</h2>${body}<button class="btn" id="btnAddSpot" style="margin-top:10px">Add a spot</button><p class="small muted" style="margin-top:8px">Worst conditions between launch and finish at each spot. Colours use your own limits.</p></div>`;
+}
+function addSpotFlow() {
+  go("map"); toast("Tap the map where you want the spot");
+  const once = (e) => { map.off("click", once); const name = (window.prompt("Name this spot (for example Leander)") || "").trim(); if (!name) return;
+    const list = state.userSpots[state.venue] || []; list.push({ id: "u" + Date.now(), name, lon: +e.lngLat.lng.toFixed(5), lat: +e.lngLat.lat.toFixed(5) });
+    state.userSpots[state.venue] = list; store.set("spots", state.userSpots); buildLabels(); toast(name + " added"); };
+  setTimeout(() => map.once("click", once), 50);
+}
+
+/* ---------- share the Row call with the crew ---------- */
+function shareRow() {
+  return `<div class="sharerow"><button class="btn primary" id="btnShare">Share with crew</button><button class="btn" id="btnCopy">Copy text</button></div>`;
+}
+function shareText(c, win) {
+  const v = V(), ev = activeEvent(), f = c.f; const wc = whitecaps(f.wind.v, f.wind.g);
+  const rows = (runConditions(win) || []).filter((r) => !r.none);
+  const lines = [`ROW CALL: ${ev ? ev.name : v.name}`, `${dayLbl(c.start)}, ${c.start.slice(11)} to ${c.end.slice(11)}: ${c.word.toUpperCase()}`,
+    `Wind ${spd(f.wind.v)} ${uLbl()}, gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}`,
+    `Waves ${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + " cm" : f.waves.v.toFixed(1) + " m"}${f.waveEst ? " (estimated chop)" : ""}, whitecaps ${wc.short}`,
+    `Visibility ${f.vis.v.toFixed(f.vis.v < 10 ? 1 : 0)} km${f.vis.steam ? ", steam fog likely" : ""}`, `${Math.round(c.temp)}°C, feels ${Math.round(f.cold.v)}°C. ${f.light.dark ? "Nav lights on." : "Daylight."}`];
+  if (rows.length) lines.push("", "Along the run:", ...rows.map((r) => `${r.sp.name}: ${spd(r.ws)} / ${spd(r.g)} ${uLbl()}${r.hs != null ? `, ${r.hs.toFixed(1)} m` : ""} (${r.cls})`));
+  lines.push("", "Forecast estimate from RowCast, not a safety guarantee. Make your own call on the water.", shareUrl(win));
+  return lines.join("\n");
+}
+const shareUrl = (win) => `${location.origin}${location.pathname}?s=call&v=${state.venue}&t=${encodeURIComponent(win.start)}&d=${win.dur}`;
+function wireCall(c, win) {
+  const a = $("btnAddSpot"); if (a) a.onclick = addSpotFlow;
+  if (!c) return;
+  const sh = $("btnShare"), cp = $("btnCopy");
+  if (sh) sh.onclick = async () => {
+    const text = shareText(c, win);
+    try { if (navigator.share) { await navigator.share({ title: "Row call", text }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    copyText(text);
+  };
+  if (cp) cp.onclick = () => copyText(shareText(c, win));
+}
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast("Copied. Paste it into your crew chat."); } catch (e) { window.prompt("Copy this text", t); } }
+
+// A shared link opens the same venue and launch window.
+booted.then(async () => {
+  const q = new URLSearchParams(location.search); const v = q.get("v"), t = q.get("t"), d = +q.get("d") || 90;
+  if (v && VENUES[v] && v !== state.venue) await selectVenue(v);
+  if (t && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(t)) { state.plan = { start: t, dur: d }; renderContext(); if (q.get("s") === "call") go("call"); }
+});
 
 </script>
 </body></html>

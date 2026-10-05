@@ -4,7 +4,7 @@ const overlay = {
   init() {
     this.wx = $("wxCanvas"); this.pt = $("ptCanvas"); this.resize();
     window.addEventListener("resize", () => this.resize());
-    this.seed(); const loop = () => { this.frame(); this.raf = requestAnimationFrame(loop); }; loop();
+    this.seed(); this.seedSea(); const loop = () => { this.frame(); this.raf = requestAnimationFrame(loop); }; loop();
   },
   resize() {
     const r = $("map").getBoundingClientRect(); this.dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -56,7 +56,9 @@ const overlay = {
     g.setTransform(d, 0, 0, d, 0, 0);
     g.globalCompositeOperation = "destination-in"; g.fillStyle = "rgba(0,0,0,0.93)"; g.fillRect(0, 0, this.cw, this.ch);
     g.globalCompositeOperation = "source-over";
-    if (!state.layers.wind || map.isMoving()) { if (map.isMoving()) g.clearRect(0, 0, this.cw, this.ch); return; }
+    if (map.isMoving()) { g.clearRect(0, 0, this.cw, this.ch); return; }
+    if (state.layers.waves) this.drawSea(g);
+    if (!state.layers.wind) return;
     const zoom = map.getZoom(); const k = 0.06 * Math.pow(1.3, zoom - 13); // px per frame per km/h
     g.lineWidth = 1.4; g.lineCap = "round";
     const buckets = {};
@@ -69,6 +71,40 @@ const overlay = {
     }
     for (const col in buckets) { g.strokeStyle = col; g.beginPath(); for (const s of buckets[col]) { g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); } g.stroke(); }
   },
+  // Wave flow: pale crest dashes travel with the wave direction (taller waves, longer crests) and white flecks
+  // appear where the wind is strong enough for whitecaps. Drawn on the water only.
+  waveDirAt(lon, lat) {
+    const wv = state.wx[state.venue].waves; if (!wv) return null; const h = Math.min(state.hour, wv.time.length - 1); let sx = 0, sy = 0;
+    wv.pts.forEach((p, i) => { const d = wv.dir[h][i]; if (d == null) return; const d2 = (p[0] - lon) ** 2 / 1.9 + (p[1] - lat) ** 2 + 1e-7, wg = 1 / d2; sx += Math.sin(d * Math.PI / 180) * wg; sy += Math.cos(d * Math.PI / 180) * wg; });
+    return sx || sy ? (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360 : null;
+  },
+  seedSea() { const n = Math.round(Math.min(650, (this.cw * this.ch) / 800)); this.wparts = []; for (let i = 0; i < n; i++) this.wparts.push(this.spawnSea()); },
+  spawnSea() { return { x: Math.random() * this.cw, y: Math.random() * this.ch, age: Math.floor(Math.random() * 40), max: 40 + Math.random() * 50, r: Math.random(), q: Math.random() }; },
+  drawSea(g) {
+    if (!this.wPath) return; if (!this.wparts || !this.wparts.length) this.seedSea();
+    const zs = Math.pow(1.3, map.getZoom() - 13); const white = [], crest = [];
+    for (const p of this.wparts) {
+      const ll = map.unproject([p.x, p.y]); const w = this.sample(ll.lng, ll.lat);
+      if (!w || p.age++ > p.max) { Object.assign(p, this.spawnSea(), { age: 0 }); continue; }
+      const wd = this.waveDirAt(ll.lng, ll.lat); const from = wd != null ? wd : w.dir; const to = ((from + 180) % 360) * Math.PI / 180;
+      const hs = w.hs != null ? w.hs : 0.0016 * (w.s / 3.6) * Math.sqrt(800 / 9.81);
+      const sp = (0.3 + 1.1 * Math.min(hs, 0.8)) * zs; const dx = Math.sin(to) * sp, dy = -Math.cos(to) * sp;
+      const wc = Math.max(0, Math.min(1, (Math.max(w.s, w.g * 0.7) - 17) / 14)), ch = Math.max(0, Math.min(1, (hs - 0.12) / 0.4));
+      if (p.r < wc) white.push([p.x, p.y, p.x + dx * 2.4, p.y + dy * 2.4]); else if (p.q < ch) crest.push([p.x, p.y, dx, dy, hs]);
+      p.x += dx; p.y += dy; if (p.x < 0 || p.y < 0 || p.x > this.cw || p.y > this.ch) Object.assign(p, this.spawnSea(), { age: 0 });
+    }
+    g.save(); g.clip(this.wPath, "evenodd"); g.lineCap = "round";
+    if (crest.length) { g.strokeStyle = state.night ? "rgba(255,140,120,.55)" : dim() ? "rgba(200,228,242,.55)" : "rgba(20,70,105,.5)"; g.lineWidth = 1.3; g.beginPath();
+      for (const [x, y, dx, dy, hs] of crest) { const m = Math.hypot(dx, dy) || 1, px = -dy / m, py = dx / m, len = (5 + hs * 26) * Math.sqrt(zs) / 2; g.moveTo(x - px * len, y - py * len); g.lineTo(x + px * len, y + py * len); } g.stroke(); }
+    if (white.length) { g.strokeStyle = state.night ? "rgba(255,205,195,.95)" : "rgba(255,255,255,.97)"; g.lineWidth = 1.8; g.beginPath(); for (const s of white) { g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); } g.stroke(); }
+    g.restore();
+  },
+  buildWaterPath() {
+    const d = state.data[state.venue]; if (!d) return null; const p2 = new Path2D();
+    const ring = (r) => { r.forEach((c, i) => { const p = map.project(c); i ? p2.lineTo(p.x, p.y) : p2.moveTo(p.x, p.y); }); p2.closePath(); };
+    d.water.features.forEach((f) => { const gm = f.geometry; (gm.type === "Polygon" ? [gm.coordinates] : gm.coordinates).forEach((poly) => poly.forEach(ring)); });
+    return p2;
+  },
   waterPath(g) {
     const d = state.data[state.venue]; if (!d) return false; g.beginPath();
     const ring = (r) => { r.forEach((c, i) => { const p = map.project(c); i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); }); g.closePath(); };
@@ -77,6 +113,7 @@ const overlay = {
   },
   drawStatic() {
     const g = this.wx.getContext("2d"); const d = this.dpr; g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, this.cw, this.ch);
+    this.wPath = this.buildWaterPath();
     const W = this.grid(); const [w, s, e, n] = W.bbox; const h = this.hourIdx();
     const a = map.project([w, n]), b = map.project([e, s]);
     // waves: colour field over open water

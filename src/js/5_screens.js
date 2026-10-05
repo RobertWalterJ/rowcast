@@ -105,6 +105,7 @@ function renderCall() {
     const f = c.f;
     html += `<div class="card verdict"><div class="vring">${ring()}<div class="w c-${c.cls}">${c.word.replace(" ", "<br>")}</div></div>
       <div style="min-width:0"><div class="vtitle c-${c.cls}">${c.word}</div><div class="muted" style="margin-top:4px">${esc(dayLbl(c.start))}, ${c.start.slice(11)} to ${c.end.slice(11)}<br>${esc(WX[c.code] || "")}, ${Math.round(c.temp)}°C</div></div></div>
+    ${shareRow()}
     <div class="factors">
       <div class="factor"><div class="top">Wind <span class="pill ${f.wind.cls}">${f.wind.cls}</span></div><div class="val">${spd(f.wind.v)}<small>${uLbl()}</small></div>${gauge(f.wind.g, L.gustC, L.gustS, L.gustS * 1.5, `gust caution ${spd(L.gustC)} · stop ${spd(L.gustS)} ${uLbl()}`)}<div class="note">gusts ${spd(f.wind.g)} from ${compass(f.wind.dir)}${V().heading != null ? relWind(f.wind.dir) : ""}</div></div>
       <div class="factor"><div class="top">${f.waveEst ? "Chop" : "Waves"} <span class="pill ${f.waves.cls}">${f.waves.cls}</span></div><div class="val">${f.waves.v < 0.1 ? Math.round(f.waves.v * 100) + "<small>cm</small>" : f.waves.v.toFixed(1) + "<small>m</small>"}</div>${gauge(f.waves.v, L.waveC, L.waveS, L.waveS * 1.6, `caution ${L.waveC} · stop ${L.waveS} m`)}<div class="note">${f.waveEst ? "estimated from wind over 800 m of river" : "open lake, outside the breakwall"}</div></div>
@@ -114,9 +115,10 @@ function renderCall() {
       <div class="factor"><div class="top">Light <span class="pill ${f.light.cls}">${f.light.dark ? "lights" : "day"}</span></div><div class="val" style="font-size:1.15rem">${f.light.dark ? "Nav lights on" : "Daylight"}</div><div class="lamps"><i style="background:var(--stbd)"></i><i style="background:var(--port)"></i><i style="background:#fff;border:1px solid var(--line)"></i></div><div class="note">sunrise ${hm(f.light.sunrise)} · sunset ${hm(f.light.sunset)}</div></div>
     </div>`;
   }
+  if (c) html += whitecapCard(c.f) + runCard(win);
   html += `<div class="card" id="waterCard"><h2>Water level</h2><p class="small muted">Loading…</p></div>`;
   html += `<p class="proto ${dataStamp().live ? "" : "c-caution"}">${esc(dataStamp().text)}</p>`;
-  $("callInner").innerHTML = html; fillWater();
+  $("callInner").innerHTML = html; fillWater(); wireCall(c, win);
   $("callInner").querySelectorAll(".wchips .chip").forEach((b) => b.onclick = () => { state.plan = { start: b.dataset.s, dur: win.dur }; renderCall(); renderContext(); });
   $("pStart").onchange = (e) => { state.plan = { start: e.target.value, dur: win.dur }; renderCall(); renderContext(); };
   $("pDur").onchange = (e) => { state.plan = { start: win.start, dur: +e.target.value }; renderCall(); renderContext(); };

@@ -62,6 +62,12 @@ function buildLabels() {
   (hazardPtsData.features || []).forEach((f) => { if (f.properties.kind !== "lock" || !f.properties.name) return;
     const id = "l" + n++; labelImage(map, id, f.properties.name.replace(/ - .*/, ""), { size: 11, weight: 700, color: P.lock });
     feats.push({ type: "Feature", geometry: f.geometry, properties: { lid: "lbl-" + id, kind: "lock", rank: 1 } }); });
+  labelImage(map, "bw", "Breakwall", { size: 11, weight: 700, spacing: 1.5, color: P.label });
+  (d.structures.features || []).filter((f) => f.properties.kind === "breakwater" && f.geometry.type === "LineString" && courseLen(f.geometry.coordinates) > 280)
+    .sort((a, b) => courseLen(b.geometry.coordinates) - courseLen(a.geometry.coordinates)).slice(0, 4)
+    .forEach((f) => feats.push({ type: "Feature", geometry: f.geometry, properties: { lid: "lbl-bw", kind: "struct" } }));
+  spotsFor().forEach((s, i) => { const id = "s" + i; labelImage(map, id, s.name, { size: 12, weight: 700, color: P.label });
+    feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [s.lon, s.lat] }, properties: { lid: "lbl-" + id, kind: "spot", rank: 0 } }); });
   if (d.depth_contours) { const used = {}; d.depth_contours.features.forEach((f) => { const dd = f.properties.d; if (used[dd] > 2) return; used[dd] = (used[dd] || 0) + 1;
     const id = "d" + n++; labelImage(map, id, dd + " m", { size: 10, weight: 600, color: P.contour });
     feats.push({ type: "Feature", geometry: f.geometry, properties: { lid: "lbl-" + id, kind: "depth" } }); }); }
@@ -101,12 +107,16 @@ function buildLayers() {
   L({ id: "road", type: "line", source: "roads", filter: ["<", ["get", "rank"], 5], layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": ["case", ["<=", ["get", "rank"], 2], P.major, P.road], "line-width": ["interpolate", ["linear"], ["zoom"], 11, ["match", ["get", "rank"], 1, 2, 2, 1.6, 3, 1, 0.3], 16, ["match", ["get", "rank"], 1, 10, 2, 8, 3, 6, 4.5]] } });
   // bridges: heavy casing over water, the chart cue a rower needs (clearance and arches)
-  L({ id: "bridge-case", type: "line", source: "roads", filter: ["==", ["get", "bridge"], 1], layout: { "line-cap": "butt" },
+  L({ id: "bridge-case", type: "line", source: "roads", filter: ["all", ["==", ["get", "bridge"], 1], ["==", ["get", "wb"], 1]], layout: { "line-cap": "butt" },
     paint: { "line-color": P.bridgeCase, "line-width": z(4, 14) } });
-  L({ id: "bridge", type: "line", source: "roads", filter: ["==", ["get", "bridge"], 1], layout: { "line-cap": "butt" },
+  L({ id: "bridge", type: "line", source: "roads", filter: ["all", ["==", ["get", "bridge"], 1], ["==", ["get", "wb"], 1]], layout: { "line-cap": "butt" },
     paint: { "line-color": chart ? P.road : "#FFFFFF", "line-width": z(2, 9) } });
-  L({ id: "rail-bridge", type: "line", source: "rail", filter: ["==", ["get", "bridge"], 1], paint: { "line-color": P.bridgeCase, "line-width": z(3, 9) } });
-  L({ id: "piers", type: "line", source: "structures", paint: { "line-color": P.pier, "line-width": z(1.5, 5) } });
+  L({ id: "rail-bridge", type: "line", source: "rail", filter: ["all", ["==", ["get", "bridge"], 1], ["==", ["get", "wb"], 1]], paint: { "line-color": P.bridgeCase, "line-width": z(3, 9) } });
+  L({ id: "piers", type: "line", source: "structures", filter: ["!=", ["get", "kind"], "breakwater"], paint: { "line-color": P.pier, "line-width": z(1.5, 5) } });
+  // breakwall: a long stone wall the crews row inside of. Dark casing, pale stone top, rubble dashes.
+  L({ id: "bw-case", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(4, 17) } });
+  L({ id: "bw", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], layout: { "line-cap": "butt", "line-join": "round" }, paint: { "line-color": P.bwFill, "line-width": z(2, 11) } });
+  L({ id: "bw-rubble", type: "line", source: "structures", filter: ["==", ["get", "kind"], "breakwater"], minzoom: 12.5, layout: { "line-join": "round" }, paint: { "line-color": P.bwCase, "line-width": z(0.8, 3), "line-dasharray": [1.4, 1.8], "line-opacity": 0.8 } });
   L({ id: "power", type: "line", source: "power", minzoom: 12, paint: { "line-color": P.power, "line-width": 1, "line-dasharray": [6, 3] } });
   // hazards: dams/weirs in danger magenta with a hatched band, lock gates as heavy bars
   L({ id: "dam-band", type: "line", source: "hazards", filter: ["in", ["get", "kind"], ["literal", ["dam", "weir"]]], paint: { "line-color": P.hazard, "line-width": z(3, 9), "line-opacity": 0.35 } });
@@ -114,7 +124,7 @@ function buildLayers() {
   L({ id: "lockgate", type: "line", source: "hazards", filter: ["==", ["get", "kind"], "lock_gate"], paint: { "line-color": P.lock, "line-width": z(2, 5) } });
   // alerts (hatched, ECCC colour)
   L({ id: "alerts-fill", type: "fill", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
-    paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": 0.22 } });
+    paint: { "fill-pattern": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "hatch-red", "orange", "hatch-orange", "hatch-yellow"], "fill-opacity": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", 0.3, "orange", 0.22, 0.09] } });
   L({ id: "alerts-line", type: "line", source: "alerts", layout: { visibility: state.layers.alerts ? "visible" : "none" },
     paint: { "line-color": ["match", ["downcase", ["coalesce", ["get", "colour"], "yellow"]], "red", "#D0302A", "orange", "#E07B00", "#C9A400"], "line-width": 2, "line-opacity": 0.8 } });
   radarBuild();
@@ -137,9 +147,10 @@ function buildLayers() {
   ic("clubs", "places", ["==", ["get", "kind"], "rowing"], "m-club", 1, { "icon-anchor": "center" });
   // labels
   buildLabels();
-  L({ id: "lbl-line", type: "symbol", source: "labels", filter: ["all", ["==", ["get", "kind"], "water"]], layout: { "symbol-placement": "line-center", "icon-image": ["get", "lid"], "icon-rotation-alignment": "map", "icon-keep-upright": true, "icon-allow-overlap": false } });
+  L({ id: "lbl-line", type: "symbol", source: "labels", filter: ["in", ["get", "kind"], ["literal", ["water", "struct"]]], layout: { "symbol-placement": "line-center", "icon-image": ["get", "lid"], "icon-rotation-alignment": "map", "icon-keep-upright": true, "icon-allow-overlap": false, "icon-offset": ["case", ["==", ["get", "kind"], "struct"], ["literal", [0, -11]], ["literal", [0, 0]]] } });
   L({ id: "lbl-depth", type: "symbol", source: "labels", filter: ["==", ["get", "kind"], "depth"], minzoom: 12.5, layout: { "symbol-placement": "line", "symbol-spacing": 400, "icon-image": ["get", "lid"], "icon-rotation-alignment": "map", "icon-keep-upright": true, visibility: state.layers.depth ? "visible" : "none" } });
-  L({ id: "lbl-pt", type: "symbol", source: "labels", filter: ["!", ["in", ["get", "kind"], ["literal", ["water", "depth"]]]], layout: { "icon-image": ["get", "lid"], "symbol-sort-key": ["coalesce", ["get", "rank"], 5], "icon-anchor": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing"]]], "left", "center"], "icon-offset": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing"]]], ["literal", [12, 0]], ["literal", [0, 0]]] } });
+  L({ id: "lbl-pt", type: "symbol", source: "labels", filter: ["!", ["in", ["get", "kind"], ["literal", ["water", "depth", "struct"]]]], layout: { "icon-image": ["get", "lid"], "symbol-sort-key": ["coalesce", ["get", "rank"], 5], "icon-anchor": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing", "spot"]]], "left", "center"], "icon-offset": ["case", ["in", ["get", "kind"], ["literal", ["lock", "rowing", "spot"]]], ["literal", [12, 0]], ["literal", [0, 0]]] } });
+  L({ id: "spot-dot", type: "circle", source: "labels", filter: ["==", ["get", "kind"], "spot"], paint: { "circle-radius": 5, "circle-color": state.night ? "#D0503F" : "#0B6E82", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 2 } });
   renderLegendMini();
 }
 
@@ -203,6 +214,7 @@ function onMapClick(e) {
     ["Visibility", w ? (w.vis / 1000).toFixed(w.vis < 10000 ? 1 : 0) + ' <small class="muted">km</small>' : "—"]
   ];
   if (w && w.hs != null && inWater) cells.push(["Waves", w.hs.toFixed(1) + ' <small class="muted">m</small>']);
+  if (w && inWater) cells.push(["Whitecaps", whitecaps(w.s, w.g).short]);
   if (depth) cells.push(["Depth", `${depth.properties.min}–${depth.properties.max > 100 ? "50+" : depth.properties.max} <small class="muted">m</small>`]);
   else if (inWater && !V().depth) cells.push(["Depth", '<small class="muted">no survey</small>']);
   if (w && w.steam && inWater) cells.push(["Fog", '<span style="color:var(--info)">steam fog</span>']);

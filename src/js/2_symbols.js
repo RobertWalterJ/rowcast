@@ -4,17 +4,17 @@
 const PAL = {
   plan: { bg: "#EEF0EA", wood: "#CFE0C3", park: "#D9E8CC", grass: "#E2ECD5", wetland: "#D2E4DC", sand: "#EDE4C8", farm: "#ECEBDD", marina: "#D9E6EE",
     water: "#A8D2EC", shore: "#6A9EC4", river: "#A8D2EC", bld: "#D8D3C9", bldLine: "#C4BEB2", road: "#FFFFFF", roadCase: "#D3CFC6", major: "#FCE3A4", majorCase: "#D9AE5E",
-    rail: "#8F8F8F", bridgeCase: "#3B3B3B", pier: "#7B7F82", power: "#A35FA0", label: "#33424A", waterLabel: "#2F6E9E", halo: "rgba(255,255,255,.9)",
+    rail: "#8F8F8F", bridgeCase: "#3B3B3B", pier: "#7B7F82", bwCase: "#2E3337", bwFill: "#C4C9CC", power: "#A35FA0", label: "#33424A", waterLabel: "#2F6E9E", halo: "rgba(255,255,255,.9)",
     depth: ["#C4E2F4", "#AED6EF", "#98CAE9", "#83BDE3", "#6FB0DC", "#5DA3D4"], contour: "#5F92BB", safety: "#1D5C8C",
     hazard: "#C2185B", lock: "#1E2A33", relief: 0.6, landmark: "#1E2A33" },
   water: { bg: "#EFE4C2", wood: "#E4D7AE", park: "#E8DDB8", grass: "#EADFBA", wetland: "#DCD8B4", sand: "#F1E7C6", farm: "#EDE2BF", marina: "#E3DCC0",
     water: "#C9E4F5", shore: "#3B4650", river: "#C9E4F5", bld: "#D5C59A", bldLine: "#B8A677", road: "#E4D6AE", roadCase: "#C9B98C", major: "#DCCB98", majorCase: "#B9A56D",
-    rail: "#A9997A", bridgeCase: "#2C2C2C", pier: "#4B4F52", power: "#B0177F", label: "#4A4232", waterLabel: "#1F5F92", halo: "rgba(244,236,210,.92)",
+    rail: "#A9997A", bridgeCase: "#2C2C2C", pier: "#4B4F52", bwCase: "#23272A", bwFill: "#9AA1A6", power: "#B0177F", label: "#4A4232", waterLabel: "#1F5F92", halo: "rgba(244,236,210,.92)",
     depth: ["#79B6E2", "#97C8EA", "#B5D9F1", "#D1E8F7", "#E8F3FB", "#FFFFFF"], contour: "#4F86B3", safety: "#0D3E66",
     hazard: "#B0177F", lock: "#1B1B1B", relief: 0.35, landmark: "#1B1B1B" },
   dark: { bg: "#0E1013", wood: "#11161A", park: "#121719", grass: "#121619", wetland: "#11171A", sand: "#16150F", farm: "#121314", marina: "#101820",
     water: "#07121B", shore: "#2E4252", river: "#07121B", bld: "#1A1D21", bldLine: "#24282D", road: "#23272C", roadCase: "#16191C", major: "#3A3324", majorCase: "#1C1A14",
-    rail: "#3A3D40", bridgeCase: "#6B7177", pier: "#5A6268", power: "#7A2B5E", label: "#8C9AA4", waterLabel: "#5D8DB0", halo: "rgba(5,8,10,.85)",
+    rail: "#3A3D40", bridgeCase: "#6B7177", pier: "#5A6268", bwCase: "#0B0E10", bwFill: "#8A949B", power: "#7A2B5E", label: "#8C9AA4", waterLabel: "#5D8DB0", halo: "rgba(5,8,10,.85)",
     depth: ["#0F2B42", "#0C2336", "#0A1C2C", "#081723", "#07131D", "#061018"], contour: "#2B4D66", safety: "#5D8DB0",
     hazard: "#C2367F", lock: "#9AA7B0", relief: 0.25, landmark: "#9AA7B0" }
 };
@@ -80,7 +80,7 @@ function labelImage(map, id, text, style) {
   const P = pal(); const s = 2;
   const font = `${style.italic ? "italic " : ""}${style.weight || 600} ${style.size || 12}px Figtree, system-ui, sans-serif`;
   const m = document.createElement("canvas").getContext("2d"); m.font = font;
-  const tw = Math.ceil(m.measureText(text).width) + 8, th = Math.ceil((style.size || 12) * 1.5) + 4;
+  const tw = Math.ceil(m.measureText(text).width + (style.spacing || 0) * text.length) + 10, th = Math.ceil((style.size || 12) * 1.5) + 4;
   const c = document.createElement("canvas"); c.width = tw * s; c.height = th * s; const g = c.getContext("2d"); g.scale(s, s);
   g.font = font; g.textBaseline = "middle"; g.lineJoin = "round"; g.strokeStyle = P.halo; g.lineWidth = 3.2;
   if (style.spacing) { g.letterSpacing = style.spacing + "px"; }
